@@ -5,6 +5,7 @@ import '../features/auth/presentation/auth_page.dart';
 import '../features/planner/presentation/home_screen.dart';
 import '../features/planner/presentation/profile_screen.dart';
 import '../features/planner/presentation/tasks_screen.dart';
+import '../features/auth/presentation/register_page.dart';
 
 // Create a ChangeNotifier for auth state
 class AuthChangeNotifier extends ChangeNotifier {
@@ -22,16 +23,14 @@ final appRouter = GoRouter(
   refreshListenable: authChangeNotifier,
   redirect: (context, state) {
     final session = Supabase.instance.client.auth.currentSession;
-    final loggingIn = state.matchedLocation == '/auth';
+    final goingToAuth = state.matchedLocation == '/auth' || state.matchedLocation == '/register';
 
-    // If no session and not on auth page, redirect to auth
-    if (session == null && !loggingIn) return '/auth';
-
-    // If has session and on auth page, redirect to home
-    if (session != null && loggingIn) return '/';
+    if (session == null && !goingToAuth) return '/auth';
+    if (session != null && goingToAuth) return '/';
 
     return null;
   },
+
   routes: [
     GoRoute(
       path: '/auth',
@@ -48,6 +47,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/tasks',
       builder: (context, state) => const TasksScreen(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const RegisterPage(),
     ),
   ],
 );

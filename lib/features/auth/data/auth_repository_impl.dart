@@ -17,4 +17,16 @@ class AuthRepositoryImpl implements AuthRepository {
       throw Exception('No se pudo iniciar sesión.');
     }
   }
+
+  @override
+  Future<void> register(String email, String password) async {
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+    );
+
+    if (response.user == null) {
+      throw Exception('No se pudo registrar el usuario.');
+    }
+  }
 }

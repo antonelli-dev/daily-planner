@@ -1,35 +1,39 @@
+// register_page.dart
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import '../domain/login_usecase.dart';
 import 'package:go_router/go_router.dart';
+import '../domain/register_usecase.dart';
 
 
-class AuthPage extends StatefulWidget {
-  const AuthPage({super.key});
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  State<AuthPage> createState() => _AuthPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _RegisterPageState extends State<RegisterPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLogin = true;
+  final _confirmPasswordController = TextEditingController();
   bool _loading = false;
-  String? _error;
 
-  Future<void> _handleAuth() async {
+  Future<void> _handleRegister() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
 
-    // Validaciones frontend
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       _showErrorDialog('Todos los campos son obligatorios.');
       return;
     }
 
-    final emailRegex = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (password != confirmPassword) {
+      _showErrorDialog('Las contraseñas no coinciden.');
+      return;
+    }
 
+    final emailRegex = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$');
 
     if (!emailRegex.hasMatch(email)) {
       _showErrorDialog('Introduce un correo electrónico válido.');
@@ -37,24 +41,18 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     setState(() => _loading = true);
-    final loginUseCase = GetIt.I<LoginUseCase>();
 
     try {
-      if (_isLogin) {
-        await loginUseCase.login(email, password);
-      } else {
-        throw UnimplementedError('Registro no implementado todavía');
-      }
+      final registerUseCase = GetIt.I<RegisterUseCase>();
+      await registerUseCase.register(email, password);
+      _showSuccessDialog('Registro exitoso. Revisa tu correo para confirmar.');
     } catch (e) {
-      _showErrorDialog(
-        e.toString().contains('invalid_credentials')
-            ? 'Credenciales incorrectas. Verifica tu email y contraseña.'
-            : 'Ocurrió un error: ${e.toString()}',
-      );
+      _showErrorDialog('Error: ${e.toString()}');
     } finally {
       setState(() => _loading = false);
     }
   }
+
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -71,12 +69,29 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-
+  void _showSuccessDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Registro exitoso'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: const Text('OK'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Daily Planner')),
+      appBar: AppBar(title: const Text('Crear cuenta')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -93,19 +108,20 @@ class _AuthPageState extends State<AuthPage> {
                 obscureText: true,
                 decoration: const InputDecoration(hintText: 'Contraseña'),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(hintText: 'Confirmar contraseña'),
+              ),
               const SizedBox(height: 24),
-              const SizedBox(height: 8),
               ElevatedButton(
-                onPressed: _loading ? null : _handleAuth,
-                child: Text(_loading
-                    ? 'Cargando...'
-                    : _isLogin
-                    ? 'Iniciar sesión'
-                    : 'Registrarse'),
+                onPressed: _loading ? null : _handleRegister,
+                child: Text(_loading ? 'Cargando...' : 'Registrarse'),
               ),
               TextButton(
-                onPressed: () => context.go('/register'),
-                child: const Text('¿No tienes cuenta? Regístrate'),
+                onPressed: () => context.go('/auth'),
+                child: const Text('¿Ya tienes cuenta? Iniciar sesión'),
               ),
             ],
           ),
