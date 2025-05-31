@@ -16,40 +16,57 @@ class _AuthPageState extends State<AuthPage> {
   String? _error;
 
   Future<void> _handleAuth() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // Validaciones frontend
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorDialog('Todos los campos son obligatorios.');
+      return;
+    }
+
+    final emailRegex = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$');
+
+    if (!emailRegex.hasMatch(email)) {
+      _showErrorDialog('Introduce un correo electrónico válido.');
+      return;
+    }
+
     setState(() => _loading = true);
     final loginUseCase = GetIt.I<LoginUseCase>();
 
     try {
       if (_isLogin) {
-        await loginUseCase.login(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-        );
+        await loginUseCase.login(email, password);
       } else {
         throw UnimplementedError('Registro no implementado todavía');
       }
     } catch (e) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Error de inicio de sesión'),
-          content: Text(
-            e.toString().contains('invalid_credentials')
-                ? 'Credenciales incorrectas. Verifica tu email y contraseña.'
-                : 'Ocurrió un error: ${e.toString()}',
-          ),
-          actions: [
-            TextButton(
-              child: const Text('Cerrar'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
+      _showErrorDialog(
+        e.toString().contains('invalid_credentials')
+            ? 'Credenciales incorrectas. Verifica tu email y contraseña.'
+            : 'Ocurrió un error: ${e.toString()}',
       );
     } finally {
       setState(() => _loading = false);
     }
   }
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: const Text('Cerrar'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
 
 
   @override
@@ -73,8 +90,6 @@ class _AuthPageState extends State<AuthPage> {
                 decoration: const InputDecoration(hintText: 'Contraseña'),
               ),
               const SizedBox(height: 24),
-              if (_error != null)
-                Text(_error!, style: const TextStyle(color: Colors.red)),
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: _loading ? null : _handleAuth,
