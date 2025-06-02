@@ -5,6 +5,7 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   Future<void> _signOut(BuildContext context) async {
+    // Mostrar diálogo de confirmación
     final shouldSignOut = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -40,60 +41,51 @@ class ProfileScreen extends StatelessWidget {
 
     if (shouldSignOut != true) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    try {
+      // Mostrar SnackBar de proceso muy breve
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
             children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(
-                'Cerrando sesión...',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey.shade700,
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
+              SizedBox(width: 12),
+              Text('Cerrando sesión...'),
             ],
           ),
+          backgroundColor: Colors.orange,
+          duration: Duration(milliseconds: 800), // Duración muy corta
+          behavior: SnackBarBehavior.floating,
         ),
-      ),
-    );
+      );
 
-    try {
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Delay muy corto solo para mostrar feedback
+      await Future.delayed(const Duration(milliseconds: 300));
 
+      // Ocultar el SnackBar antes del logout
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+
+      // Hacer logout inmediatamente después
       await Supabase.instance.client.auth.signOut();
 
-      if (context.mounted) {
-        Navigator.of(context).pop();
+      // El GoRouter se encargará automáticamente de la redirección
+      // No agregamos más SnackBars aquí para evitar que persistan
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Text('Sesión cerrada correctamente'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-      }
     } catch (e) {
+      // Solo mostrar error si el contexto sigue válido
       if (context.mounted) {
-        Navigator.of(context).pop(); // Cerrar loading
+        // Primero ocultar cualquier SnackBar existente
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        // Luego mostrar el error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -137,15 +129,19 @@ class ProfileScreen extends StatelessWidget {
             children: [
               const SizedBox(height: 20),
 
+              // Avatar y información del usuario
               _buildUserInfo(userName, userEmail),
               const SizedBox(height: 40),
 
+              // Estadísticas del usuario
               _buildStatsCards(),
               const SizedBox(height: 32),
 
+              // Opciones del perfil
               _buildProfileOptions(context),
               const SizedBox(height: 32),
 
+              // Botón de cerrar sesión
               _buildSignOutButton(context),
             ],
           ),

@@ -4,7 +4,6 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/register_usecase.dart';
 
-
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -17,6 +16,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _loading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -68,14 +69,14 @@ class _RegisterPageState extends State<RegisterPage> {
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    '¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.',
+                    'Si el correo no está registrado, recibirás un email de confirmación.',
                     style: TextStyle(fontSize: 16),
                   ),
                 ),
               ],
             ),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -95,7 +96,20 @@ class _RegisterPageState extends State<RegisterPage> {
 
     } catch (e) {
       if (mounted) {
-        _showErrorSnackBar('Error: ${e.toString()}');
+        String errorMessage = 'Ocurrió un error inesperado.';
+
+        if (e.toString().contains('already_registered') ||
+            e.toString().contains('User already registered')) {
+          errorMessage = 'Este correo ya está registrado. Intenta iniciar sesión.';
+        } else if (e.toString().contains('invalid_email')) {
+          errorMessage = 'El formato del correo electrónico no es válido.';
+        } else if (e.toString().contains('weak_password')) {
+          errorMessage = 'La contraseña es muy débil. Usa al menos 6 caracteres.';
+        } else if (e.toString().contains('network')) {
+          errorMessage = 'Error de conexión. Verifica tu internet.';
+        }
+
+        _showErrorSnackBar(errorMessage);
       }
     } finally {
       if (mounted) {
@@ -138,9 +152,37 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('Crear cuenta'),
+        title: const Text(
+          'Crear Cuenta',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
         elevation: 0,
+        shadowColor: Colors.grey.shade300,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: IconThemeData(color: Colors.grey.shade700),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.grey.shade200,
+                  Colors.grey.shade100,
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Center(
@@ -150,25 +192,57 @@ class _RegisterPageState extends State<RegisterPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Logo/Icon section
+                Container(
+                  width: 80,
+                  height: 80,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.green.shade400,
+                        Colors.blue.shade400,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.shade200,
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.person_add,
+                    color: Colors.white,
+                    size: 40,
+                  ),
+                ),
+
                 // Welcome text
                 const Text(
-                  'Crea tu cuenta',
+                  'Únete a nosotros',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 32,
                     fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Completa los campos para registrarte',
+                Text(
+                  'Crea tu cuenta para comenzar',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 40),
 
                 // Email field
                 TextField(
@@ -191,7 +265,15 @@ class _RegisterPageState extends State<RegisterPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.grey.shade50,
+                    fillColor: Colors.white,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.green.shade400, width: 2),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -199,7 +281,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 // Password field
                 TextField(
                   controller: _passwordController,
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   enabled: !_loading,
                   style: const TextStyle(
                     fontSize: 16,
@@ -213,11 +295,30 @@ class _RegisterPageState extends State<RegisterPage> {
                       fontWeight: FontWeight.normal,
                     ),
                     prefixIcon: const Icon(Icons.lock_outlined),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        color: Colors.grey.shade600,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.grey.shade50,
+                    fillColor: Colors.white,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.green.shade400, width: 2),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -225,7 +326,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 // Confirm password field
                 TextField(
                   controller: _confirmPasswordController,
-                  obscureText: true,
+                  obscureText: _obscureConfirmPassword,
                   enabled: !_loading,
                   style: const TextStyle(
                     fontSize: 16,
@@ -238,26 +339,64 @@ class _RegisterPageState extends State<RegisterPage> {
                       color: Colors.grey.shade600,
                       fontWeight: FontWeight.normal,
                     ),
-                    prefixIcon: const Icon(Icons.lock_outlined),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        color: Colors.grey.shade600,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.grey.shade50,
+                    fillColor: Colors.white,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.green.shade400, width: 2),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
                 // Register button
-                SizedBox(
-                  height: 56, // Fixed height for button
+                Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.green.shade400,
+                        Colors.green.shade600,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.shade200,
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
                   child: ElevatedButton(
                     onPressed: _loading ? null : _handleRegister,
                     style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      disabledBackgroundColor: Colors.grey.shade300,
                     ),
                     child: _loading
                         ? const SizedBox(
@@ -269,19 +408,77 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     )
                         : const Text(
-                      'Registrarse',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      'Crear Cuenta',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+
+                // Divider
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'o',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
                 // Login link
-                TextButton(
-                  onPressed: _loading ? null : () => context.go('/auth'),
-                  child: const Text(
-                    '¿Ya tienes cuenta? Iniciar sesión',
-                    style: TextStyle(fontSize: 16),
+                Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.shade100,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TextButton(
+                    onPressed: _loading ? null : () => context.go('/auth'),
+                    style: TextButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.login,
+                          color: Colors.green.shade400,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '¿Ya tienes cuenta? Iniciar sesión',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.green.shade400,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
