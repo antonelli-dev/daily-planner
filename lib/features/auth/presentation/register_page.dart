@@ -192,7 +192,6 @@ class _RegisterPageState extends State<RegisterPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Logo/Icon section
                 Container(
                   width: 80,
                   height: 80,
@@ -222,7 +221,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                 ),
 
-                // Welcome text
                 const Text(
                   'Únete a nosotros',
                   style: TextStyle(
@@ -244,7 +242,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 40),
 
-                // Email field
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -278,7 +275,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password field
+
                 TextField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -323,7 +320,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Confirm password field
+
                 TextField(
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
@@ -368,7 +365,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 32),
 
-                // Register button
+
                 Container(
                   height: 56,
                   decoration: BoxDecoration(
@@ -419,7 +416,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Divider
                 Row(
                   children: [
                     Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -438,7 +434,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Login link
                 Container(
                   height: 56,
                   decoration: BoxDecoration(
