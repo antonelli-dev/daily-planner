@@ -52,5 +52,19 @@ final appRouter = GoRouter(
       path: '/register',
       builder: (context, state) => const RegisterPage(),
     ),
+    GoRoute(
+      path: '/workspaces',
+      builder: (context, state) => const WorkspaceSelectionScreen(),
+    ),
+    GoRoute(
+      path: '/workspace/:id',
+      builder: (context, state) => const EnhancedTasksScreen(
+        workspaceId: state.pathParameters['id']!,
+      ),
+    ),
+    GoRoute(
+      path: '/create-task',
+      builder: (context, state) => const CreateTaskScreen(),
+    ),
   ],
 );
