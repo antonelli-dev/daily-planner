@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class TasksScreen extends StatelessWidget {
-  const TasksScreen({super.key});
+  final String? workspaceId;
+
+  const TasksScreen({
+    super.key,
+    this.workspaceId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +27,12 @@ class TasksScreen extends StatelessWidget {
               _buildHeader(userName),
               const SizedBox(height: 24),
 
+              // Workspace info (if available)
+              if (workspaceId != null) ...[
+                _buildWorkspaceInfo(),
+                const SizedBox(height: 24),
+              ],
+
               // Tarjeta principal de progreso
               _buildProgressCard(),
               const SizedBox(height: 32),
@@ -39,6 +50,79 @@ class TasksScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceInfo() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.blue.shade400,
+            Colors.purple.shade400,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.workspaces,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Current Workspace',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  'Workspace ID: ${workspaceId!.substring(0, 8)}...',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'ACTIVE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -135,9 +219,11 @@ class TasksScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Your today\'s task\nalmost done!',
-                      style: TextStyle(
+                    Text(
+                      workspaceId != null
+                          ? 'Workspace tasks\nalmost done!'
+                          : 'Your today\'s task\nalmost done!',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
