@@ -57,71 +57,281 @@ class _WorkspaceSelectionScreenState extends State<WorkspaceSelectionScreen> {
 
   Future<void> _acceptInvitation(String workspaceId) async {
     try {
-      final acceptInvitationUseCase = GetIt.I<AcceptInvitationUseCase>();
-      await acceptInvitationUseCase(workspaceId);
-
+      // Show loading state
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
               SizedBox(width: 12),
-              Text('Invitation accepted!'),
+              Text('Accepting invitation...'),
             ],
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
         ),
       );
 
-      _loadData(); // Refresh data
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error accepting invitation: ${e.toString()}')),
-            ],
+      final acceptInvitationUseCase = GetIt.I<AcceptInvitationUseCase>();
+      await acceptInvitationUseCase(workspaceId);
+
+      if (mounted) {
+        // Hide loading snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Invitation accepted successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
-          backgroundColor: Colors.red,
-        ),
-      );
+        );
+
+        _loadData(); // Refresh data
+      }
+    } catch (e) {
+      if (mounted) {
+        // Hide loading snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        String errorMessage = e.toString().replaceAll('Exception: ', '');
+
+        // Check if it's a premium upgrade message
+        if (errorMessage.contains('Plan básico') ||
+            errorMessage.contains('Premium') ||
+            errorMessage.contains('Actualiza')) {
+          _showPremiumUpgradeDialog(errorMessage);
+        } else {
+          // Show regular error
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Error accepting invitation: $errorMessage')),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => _acceptInvitation(workspaceId),
+              ),
+            ),
+          );
+        }
+      }
     }
+  }
+
+  void _showPremiumUpgradeDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.orange.shade400, Colors.amber.shade400],
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.star, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Upgrade to Premium',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message.replaceAll('Error: Failed to accept invitation: ', ''),
+              style: const TextStyle(fontSize: 16, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange.shade600, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Premium features include team collaboration, unlimited workspaces, and advanced reporting.',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Maybe Later', style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.orange.shade400, Colors.amber.shade500],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // TODO: Navigate to premium upgrade screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Premium upgrade feature coming soon!'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.star, size: 18),
+              label: const Text('Upgrade Now'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _rejectInvitation(String workspaceId) async {
     try {
-      final rejectInvitationUseCase = GetIt.I<RejectInvitationUseCase>();
-      await rejectInvitationUseCase(workspaceId);
+      // Show confirmation dialog first
+      final shouldReject = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Reject Invitation'),
+          content: const Text('Are you sure you want to reject this workspace invitation?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Reject'),
+            ),
+          ],
+        ),
+      );
 
+      if (shouldReject != true) return;
+
+      // Show loading state
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.white),
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
               SizedBox(width: 12),
-              Text('Invitation rejected'),
+              Text('Rejecting invitation...'),
             ],
           ),
           backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
         ),
       );
 
-      _loadData(); // Refresh data
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error rejecting invitation: ${e.toString()}')),
-            ],
+      final rejectInvitationUseCase = GetIt.I<RejectInvitationUseCase>();
+      await rejectInvitationUseCase(workspaceId);
+
+      if (mounted) {
+        // Hide loading snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Invitation rejected'),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
           ),
-          backgroundColor: Colors.red,
-        ),
-      );
+        );
+
+        _loadData(); // Refresh data
+      }
+    } catch (e) {
+      if (mounted) {
+        // Hide loading snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Error rejecting invitation: ${e.toString().replaceAll('Exception: ', '')}'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _rejectInvitation(workspaceId),
+            ),
+          ),
+        );
+      }
     }
   }
 
