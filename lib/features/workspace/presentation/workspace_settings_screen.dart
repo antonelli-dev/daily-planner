@@ -3,12 +3,14 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/entities/workspace.entity.dart';
 import '../domain/entities/workspace_member.dart';
-import '../domain/usecases/get_workspace.usecase.dart';
+import '../domain/usecases/get_workspace_by_id.usecase.dart';
 import '../domain/usecases/update_workspace.usecase.dart';
 import '../domain/usecases/delete_workspace.usecase.dart';
 import '../domain/usecases/get_workspace_members.usecase.dart';
 import '../domain/usecases/invite_member.usecase.dart';
 import '../domain/usecases/remove_member.usecase.dart';
+import '../../../core/shared/widgets/loading_widget.dart';
+import '../../../core/shared/widgets/error_widget.dart';
 
 class WorkspaceSettingsScreen extends StatefulWidget {
   final String workspaceId;
@@ -55,21 +57,19 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
       final getWorkspaceUseCase = GetIt.I<GetWorkspaceUseCase>();
       final getMembersUseCase = GetIt.I<GetWorkspaceMembersUseCase>();
 
-      final results = await Future.wait([
-        getWorkspaceUseCase(widget.workspaceId),
-        getMembersUseCase(widget.workspaceId),
-      ]);
-
-      final workspace = results[0] as Workspace;
-      final members = results[1] as List<WorkspaceMember>;
+      // Load workspace and members in parallel
+      final workspace = await getWorkspaceUseCase(widget.workspaceId);
+      final members = await getMembersUseCase(widget.workspaceId);
 
       setState(() {
         _workspace = workspace;
         _members = members;
         _nameController.text = workspace.name;
         _descriptionController.text = workspace.description ?? '';
-        // TODO: Check if current user is owner
-        _isOwner = true; // For now, assume user is owner
+
+        // Check if current user is owner - you'll need to implement this check
+        // For now, assuming user is owner
+        _isOwner = true;
         _loading = false;
       });
     } catch (e) {
@@ -82,6 +82,12 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
 
   Future<void> _updateWorkspace() async {
     if (_workspace == null) return;
+
+    // Validate input
+    if (_nameController.text.trim().isEmpty) {
+      _showSnackBar('Workspace name cannot be empty', isError: true);
+      return;
+    }
 
     try {
       final updateWorkspaceUseCase = GetIt.I<UpdateWorkspaceUseCase>();
@@ -97,44 +103,40 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
         _workspace = updatedWorkspace;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Workspace updated successfully!'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
+      _showSnackBar('Workspace updated successfully!');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error updating workspace: ${e.toString()}')),
-            ],
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('Error updating workspace: ${e.toString()}', isError: true);
     }
   }
 
   Future<void> _deleteWorkspace() async {
     if (_workspace == null) return;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await _showDeleteConfirmationDialog();
+    if (!confirmed) return;
+
+    try {
+      final deleteWorkspaceUseCase = GetIt.I<DeleteWorkspaceUseCase>();
+      await deleteWorkspaceUseCase(widget.workspaceId);
+
+      if (mounted) {
+        _showSnackBar('Workspace deleted successfully!');
+        // Navigate back to workspace selection
+        context.go('/workspaces');
+      }
+    } catch (e) {
+      _showSnackBar('Error deleting workspace: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<bool> _showDeleteConfirmationDialog() async {
+    return await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Workspace'),
         content: Text(
-          'Are you sure you want to delete "${_workspace!.name}"? This action cannot be undone.',
+          'Are you sure you want to delete "${_workspace!.name}"? This action cannot be undone and will delete all associated data.',
         ),
         actions: [
           TextButton(
@@ -143,55 +145,41 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
           ),
         ],
       ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final deleteWorkspaceUseCase = GetIt.I<DeleteWorkspaceUseCase>();
-      await deleteWorkspaceUseCase(widget.workspaceId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Text('Workspace deleted successfully'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-        context.go('/workspaces');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error deleting workspace: ${e.toString()}')),
-            ],
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+    ) ?? false;
   }
 
   Future<void> _inviteMember() async {
+    final result = await _showInviteMemberDialog();
+    if (result == null) return;
+
+    try {
+      final inviteMemberUseCase = GetIt.I<InviteMemberUseCase>();
+      await inviteMemberUseCase(
+        widget.workspaceId,
+        result['email']!,
+        result['role']!,
+      );
+
+      _showSnackBar('Invitation sent successfully!');
+      _loadData(); // Refresh data
+    } catch (e) {
+      _showSnackBar('Error sending invitation: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<Map<String, String>?> _showInviteMemberDialog() async {
     final emailController = TextEditingController();
     String selectedRole = 'member';
 
-    final result = await showDialog<Map<String, String>>(
+    return await showDialog<Map<String, String>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -202,19 +190,25 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
             children: [
               TextField(
                 controller: emailController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Email Address',
                   hintText: 'Enter member email',
-                  prefixIcon: Icon(Icons.email),
+                  prefixIcon: const Icon(Icons.email),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: selectedRole,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Role',
-                  prefixIcon: Icon(Icons.person),
+                  prefixIcon: const Icon(Icons.person),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 items: const [
                   DropdownMenuItem(value: 'member', child: Text('Member')),
@@ -234,64 +228,45 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
               child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop({
-                'email': emailController.text.trim(),
-                'role': selectedRole,
-              }),
-              child: const Text('Invite'),
+              onPressed: () {
+                if (emailController.text.trim().isEmpty) return;
+                Navigator.of(context).pop({
+                  'email': emailController.text.trim(),
+                  'role': selectedRole,
+                });
+              },
+              child: const Text('Send Invitation'),
             ),
           ],
         ),
       ),
     );
-
-    if (result == null || result['email']!.isEmpty) return;
-
-    try {
-      final inviteMemberUseCase = GetIt.I<InviteMemberUseCase>();
-      await inviteMemberUseCase(
-        widget.workspaceId,
-        result['email']!,
-        result['role']!,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Invitation sent successfully!'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      _loadData(); // Refresh members list
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error sending invitation: ${e.toString()}')),
-            ],
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   Future<void> _removeMember(WorkspaceMember member) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await _showRemoveMemberDialog(member);
+    if (!confirmed) return;
+
+    try {
+      final removeMemberUseCase = GetIt.I<RemoveMemberUseCase>();
+      await removeMemberUseCase(widget.workspaceId, member.userId);
+
+      _showSnackBar('Member removed successfully');
+      _loadData(); // Refresh data
+    } catch (e) {
+      _showSnackBar('Error removing member: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<bool> _showRemoveMemberDialog(WorkspaceMember member) async {
+    return await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Remove Member'),
-        content: Text('Are you sure you want to remove ${member.userEmail ?? 'this member'}?'),
+        content: Text(
+          'Are you sure you want to remove ${member.userEmail ?? 'this member'} from the workspace?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -299,47 +274,35 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove'),
           ),
         ],
       ),
+    ) ?? false;
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 4 : 2),
+      ),
     );
-
-    if (confirmed != true) return;
-
-    try {
-      final removeMemberUseCase = GetIt.I<RemoveMemberUseCase>();
-      await removeMemberUseCase(widget.workspaceId, member.userId);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Member removed successfully'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      _loadData(); // Refresh members list
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error removing member: ${e.toString()}')),
-            ],
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   @override
@@ -366,46 +329,27 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
             IconButton(
               onPressed: _deleteWorkspace,
               icon: const Icon(Icons.delete_outline, color: Colors.red),
+              tooltip: 'Delete Workspace',
             ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? _buildErrorState()
-          : _buildContent(),
+      body: _buildBody(),
     );
   }
 
-  Widget _buildErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading workspace',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadData,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try Again'),
-            ),
-          ],
-        ),
-      ),
-    );
+  Widget _buildBody() {
+    if (_loading) {
+      return const LoadingWidget(message: 'Loading workspace settings...');
+    }
+
+    if (_error != null) {
+      return CustomErrorWidget.generic(
+        message: _error!,
+        onRetry: _loadData,
+      );
+    }
+
+    return _buildContent();
   }
 
   Widget _buildContent() {
@@ -426,10 +370,11 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
             'Members (${_members.length})',
             _buildMembersCard(),
           ),
-          const SizedBox(height: 32),
 
-          // Danger Zone (only for owners)
-          if (_isOwner) _buildDangerZone(),
+          if (_isOwner) ...[
+            const SizedBox(height: 32),
+            _buildDangerZone(),
+          ],
         ],
       ),
     );
@@ -486,7 +431,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
             enabled: _isOwner,
             maxLines: 3,
             decoration: InputDecoration(
-              labelText: 'Description',
+              labelText: 'Description (Optional)',
               prefixIcon: const Icon(Icons.description),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
@@ -548,50 +493,55 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
               ),
             ),
           if (_members.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                children: [
-                  Icon(Icons.people_outline, size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No members yet',
-                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            )
+            _buildEmptyMembersState()
           else
-            ...(_members.asMap().entries.map((entry) {
-              final index = entry.key;
-              final member = entry.value;
-              return Column(
-                children: [
-                  if (index > 0 || _isOwner) const Divider(height: 1),
-                  _buildMemberTile(member),
-                ],
-              );
-            }).toList()),
+            ..._buildMembersList(),
         ],
       ),
     );
+  }
+
+  Widget _buildEmptyMembersState() {
+    return Padding(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        children: [
+          Icon(Icons.people_outline, size: 48, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'No members yet',
+            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Invite team members to collaborate',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildMembersList() {
+    return _members.asMap().entries.map((entry) {
+      final index = entry.key;
+      final member = entry.value;
+      return Column(
+        children: [
+          if (index > 0 || _isOwner) const Divider(height: 1),
+          _buildMemberTile(member),
+        ],
+      );
+    }).toList();
   }
 
   Widget _buildMemberTile(WorkspaceMember member) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: CircleAvatar(
-        backgroundColor: member.isOwner
-            ? Colors.purple.shade400
-            : member.isAdmin
-            ? Colors.blue.shade400
-            : Colors.green.shade400,
+        backgroundColor: _getMemberAvatarColor(member),
         child: Icon(
-          member.isOwner
-              ? Icons.star
-              : member.isAdmin
-              ? Icons.admin_panel_settings
-              : Icons.person,
+          _getMemberIcon(member),
           color: Colors.white,
           size: 20,
         ),
@@ -600,57 +550,82 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
         member.userEmail ?? 'Unknown User',
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      subtitle: Row(
-        children: [
+      subtitle: _buildMemberSubtitle(member),
+      trailing: _buildMemberActions(member),
+    );
+  }
+
+  Color _getMemberAvatarColor(WorkspaceMember member) {
+    if (member.isOwner) return Colors.purple.shade400;
+    if (member.isAdmin) return Colors.blue.shade400;
+    return Colors.green.shade400;
+  }
+
+  IconData _getMemberIcon(WorkspaceMember member) {
+    if (member.isOwner) return Icons.star;
+    if (member.isAdmin) return Icons.admin_panel_settings;
+    return Icons.person;
+  }
+
+  Widget _buildMemberSubtitle(WorkspaceMember member) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: _getMemberRoleColor(member),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            member.role.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: _getMemberRoleTextColor(member),
+            ),
+          ),
+        ),
+        if (member.isPending) ...[
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: member.isOwner
-                  ? Colors.purple.shade100
-                  : member.isAdmin
-                  ? Colors.blue.shade100
-                  : Colors.green.shade100,
+              color: Colors.orange.shade100,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              member.role.toUpperCase(),
+              'PENDING',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: member.isOwner
-                    ? Colors.purple.shade700
-                    : member.isAdmin
-                    ? Colors.blue.shade700
-                    : Colors.green.shade700,
+                color: Colors.orange.shade700,
               ),
             ),
           ),
-          if (member.isPending) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'PENDING',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.orange.shade700,
-                ),
-              ),
-            ),
-          ],
         ],
-      ),
-      trailing: _isOwner && !member.isOwner
-          ? IconButton(
-        onPressed: () => _removeMember(member),
-        icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-      )
-          : null,
+      ],
+    );
+  }
+
+  Color _getMemberRoleColor(WorkspaceMember member) {
+    if (member.isOwner) return Colors.purple.shade100;
+    if (member.isAdmin) return Colors.blue.shade100;
+    return Colors.green.shade100;
+  }
+
+  Color _getMemberRoleTextColor(WorkspaceMember member) {
+    if (member.isOwner) return Colors.purple.shade700;
+    if (member.isAdmin) return Colors.blue.shade700;
+    return Colors.green.shade700;
+  }
+
+  Widget? _buildMemberActions(WorkspaceMember member) {
+    if (!_isOwner || member.isOwner) return null;
+
+    return IconButton(
+      onPressed: () => _removeMember(member),
+      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+      tooltip: 'Remove Member',
     );
   }
 
@@ -681,7 +656,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Once you delete a workspace, there is no going back. Please be certain.',
+            'Once you delete a workspace, there is no going back. This will permanently delete the workspace and all associated data.',
             style: TextStyle(
               fontSize: 14,
               color: Colors.red.shade700,
