@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/api_response.dart';
 
 class ApiClient {
@@ -7,7 +9,7 @@ class ApiClient {
   ApiClient(this._client);
 
   // Base URL for your API
-  String get baseUrl => 'http://localhost:3000/api/v1'; // Replace with your API URL
+  String get baseUrl => 'http://localhost:3000/api/v1';
 
   // Helper method to get current user ID
   String get currentUserId {
@@ -43,24 +45,31 @@ class ApiClient {
         url += '?$query';
       }
 
-      final response = await _client.functions.invoke(
-        'api-proxy',
-        body: {
-          'method': 'GET',
-          'url': url,
-          'headers': _headers,
-        },
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _headers,
       );
 
-      if (response.status == 200) {
-        final data = response.data;
-        return ApiResponse.success(
-          fromJson != null ? fromJson(data) : data as T,
-        );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final responseBody = json.decode(response.body);
+
+        // Handle your API's response structure: {"data": ..., "success": true}
+        if (responseBody is Map<String, dynamic> && responseBody.containsKey('data')) {
+          final data = responseBody['data'];
+          return ApiResponse.success(
+            fromJson != null ? fromJson(data) : data as T,
+          );
+        } else {
+          // Fallback for direct data response
+          return ApiResponse.success(
+            fromJson != null ? fromJson(responseBody) : responseBody as T,
+          );
+        }
       } else {
+        final errorBody = json.decode(response.body);
         return ApiResponse.error(
-          response.data['message'] ?? 'Request failed',
-          response.status,
+          errorBody['message'] ?? 'Request failed',
+          response.statusCode,
         );
       }
     } catch (e) {
@@ -75,25 +84,32 @@ class ApiClient {
         T Function(dynamic)? fromJson,
       }) async {
     try {
-      final response = await _client.functions.invoke(
-        'api-proxy',
-        body: {
-          'method': 'POST',
-          'url': '$baseUrl$endpoint',
-          'headers': _headers,
-          'body': body,
-        },
+      final response = await http.post(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _headers,
+        body: body != null ? json.encode(body) : null,
       );
 
-      if (response.status >= 200 && response.status < 300) {
-        final data = response.data;
-        return ApiResponse.success(
-          fromJson != null ? fromJson(data) : data as T,
-        );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final responseBody = json.decode(response.body);
+
+        // Handle your API's response structure: {"data": ..., "success": true}
+        if (responseBody is Map<String, dynamic> && responseBody.containsKey('data')) {
+          final data = responseBody['data'];
+          return ApiResponse.success(
+            fromJson != null ? fromJson(data) : data as T,
+          );
+        } else {
+          // Fallback for direct data response
+          return ApiResponse.success(
+            fromJson != null ? fromJson(responseBody) : responseBody as T,
+          );
+        }
       } else {
+        final errorBody = json.decode(response.body);
         return ApiResponse.error(
-          response.data['message'] ?? 'Request failed',
-          response.status,
+          errorBody['message'] ?? 'Request failed',
+          response.statusCode,
         );
       }
     } catch (e) {
@@ -108,25 +124,32 @@ class ApiClient {
         T Function(dynamic)? fromJson,
       }) async {
     try {
-      final response = await _client.functions.invoke(
-        'api-proxy',
-        body: {
-          'method': 'PUT',
-          'url': '$baseUrl$endpoint',
-          'headers': _headers,
-          'body': body,
-        },
+      final response = await http.put(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _headers,
+        body: body != null ? json.encode(body) : null,
       );
 
-      if (response.status >= 200 && response.status < 300) {
-        final data = response.data;
-        return ApiResponse.success(
-          fromJson != null ? fromJson(data) : data as T,
-        );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final responseBody = json.decode(response.body);
+
+        // Handle your API's response structure: {"data": ..., "success": true}
+        if (responseBody is Map<String, dynamic> && responseBody.containsKey('data')) {
+          final data = responseBody['data'];
+          return ApiResponse.success(
+            fromJson != null ? fromJson(data) : data as T,
+          );
+        } else {
+          // Fallback for direct data response
+          return ApiResponse.success(
+            fromJson != null ? fromJson(responseBody) : responseBody as T,
+          );
+        }
       } else {
+        final errorBody = json.decode(response.body);
         return ApiResponse.error(
-          response.data['message'] ?? 'Request failed',
-          response.status,
+          errorBody['message'] ?? 'Request failed',
+          response.statusCode,
         );
       }
     } catch (e) {
@@ -137,21 +160,18 @@ class ApiClient {
   // Generic DELETE request
   Future<ApiResponse<bool>> delete(String endpoint) async {
     try {
-      final response = await _client.functions.invoke(
-        'api-proxy',
-        body: {
-          'method': 'DELETE',
-          'url': '$baseUrl$endpoint',
-          'headers': _headers,
-        },
+      final response = await http.delete(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _headers,
       );
 
-      if (response.status >= 200 && response.status < 300) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         return ApiResponse.success(true);
       } else {
+        final errorBody = json.decode(response.body);
         return ApiResponse.error(
-          response.data['message'] ?? 'Delete failed',
-          response.status,
+          errorBody['message'] ?? 'Delete failed',
+          response.statusCode,
         );
       }
     } catch (e) {
@@ -166,25 +186,32 @@ class ApiClient {
         T Function(dynamic)? fromJson,
       }) async {
     try {
-      final response = await _client.functions.invoke(
-        'api-proxy',
-        body: {
-          'method': 'PATCH',
-          'url': '$baseUrl$endpoint',
-          'headers': _headers,
-          'body': body,
-        },
+      final response = await http.patch(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _headers,
+        body: body != null ? json.encode(body) : null,
       );
 
-      if (response.status >= 200 && response.status < 300) {
-        final data = response.data;
-        return ApiResponse.success(
-          fromJson != null ? fromJson(data) : data as T,
-        );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final responseBody = json.decode(response.body);
+
+        // Handle your API's response structure: {"data": ..., "success": true}
+        if (responseBody is Map<String, dynamic> && responseBody.containsKey('data')) {
+          final data = responseBody['data'];
+          return ApiResponse.success(
+            fromJson != null ? fromJson(data) : data as T,
+          );
+        } else {
+          // Fallback for direct data response
+          return ApiResponse.success(
+            fromJson != null ? fromJson(responseBody) : responseBody as T,
+          );
+        }
       } else {
+        final errorBody = json.decode(response.body);
         return ApiResponse.error(
-          response.data['message'] ?? 'Request failed',
-          response.status,
+          errorBody['message'] ?? 'Request failed',
+          response.statusCode,
         );
       }
     } catch (e) {

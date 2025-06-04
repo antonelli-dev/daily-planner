@@ -11,14 +11,23 @@ class WorkspaceRepositoryImpl implements WorkspaceRepository {
 
   @override
   Future<List<Workspace>> getWorkspaces() async {
-    final response = await _apiClient.get<List<dynamic>>(
+    final response = await _apiClient.get<dynamic>(
       ApiEndpoints.workspaces,
     );
 
     return response.when(
-      success: (data) => data
-          .map((json) => Workspace.fromJson(json as Map<String, dynamic>))
-          .toList(),
+      success: (data) {
+        // API returns: {"data": [...], "success": true}
+        // The data is already extracted by ApiClient
+        if (data is List) {
+          return data
+              .map((json) => Workspace.fromJson(json as Map<String, dynamic>))
+              .toList();
+        } else {
+          // If no workspaces, return empty list
+          return <Workspace>[];
+        }
+      },
       error: (error, statusCode) => throw Exception(error),
     );
   }
@@ -79,14 +88,22 @@ class WorkspaceRepositoryImpl implements WorkspaceRepository {
 
   @override
   Future<List<WorkspaceMember>> getWorkspaceMembers(String workspaceId) async {
-    final response = await _apiClient.get<List<dynamic>>(
+    final response = await _apiClient.get<dynamic>(
       ApiEndpoints.workspaceMembers(workspaceId),
     );
 
     return response.when(
-      success: (data) => data
-          .map((json) => WorkspaceMember.fromJson(json as Map<String, dynamic>))
-          .toList(),
+      success: (data) {
+        // API returns: {"data": [...], "success": true}
+        if (data is List) {
+          return data
+              .map((json) => WorkspaceMember.fromJson(json as Map<String, dynamic>))
+              .toList();
+        } else {
+          // If no members, return empty list
+          return <WorkspaceMember>[];
+        }
+      },
       error: (error, statusCode) => throw Exception(error),
     );
   }
@@ -121,23 +138,30 @@ class WorkspaceRepositoryImpl implements WorkspaceRepository {
 
   @override
   Future<List<WorkspaceMember>> getPendingInvitations() async {
-    // This endpoint might need to be added to your API
-    final response = await _apiClient.get<List<dynamic>>(
-      '/invitations/pending', // Adjust based on your API
+    final response = await _apiClient.get<dynamic>(
+      ApiEndpoints.pendingInvitations,
     );
 
     return response.when(
-      success: (data) => data
-          .map((json) => WorkspaceMember.fromJson(json as Map<String, dynamic>))
-          .toList(),
+      success: (data) {
+        // API returns: {"data": [...], "success": true}
+        if (data is List) {
+          return data
+              .map((json) => WorkspaceMember.fromJson(json as Map<String, dynamic>))
+              .toList();
+        } else {
+          // If no pending invitations, return empty list
+          return <WorkspaceMember>[];
+        }
+      },
       error: (error, statusCode) => throw Exception(error),
     );
   }
 
   @override
   Future<WorkspaceMember> acceptInvitation(String workspaceId) async {
-    final response = await _apiClient.patch<Map<String, dynamic>>(
-      '/workspaces/$workspaceId/invitations/accept', // Adjust based on your API
+    final response = await _apiClient.post<Map<String, dynamic>>(
+      ApiEndpoints.acceptInvitation(workspaceId),
     );
 
     return response.when(
@@ -148,8 +172,8 @@ class WorkspaceRepositoryImpl implements WorkspaceRepository {
 
   @override
   Future<void> rejectInvitation(String workspaceId) async {
-    final response = await _apiClient.patch(
-      '/workspaces/$workspaceId/invitations/reject', // Adjust based on your API
+    final response = await _apiClient.delete(
+      ApiEndpoints.rejectInvitation(workspaceId),
     );
 
     response.when(

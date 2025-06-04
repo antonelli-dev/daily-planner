@@ -1,13 +1,14 @@
 class ApiEndpoints {
-  // Base endpoints
-  static const String workspaces = '/workspaces';
-
   // Workspace endpoints
+  static const String workspaces = '/workspaces';
   static String workspace(String id) => '/workspaces/$id';
   static String workspaceMembers(String id) => '/workspaces/$id/members';
   static String inviteMember(String id) => '/workspaces/$id/invite';
   static String removeMember(String workspaceId, String userId) =>
       '/workspaces/$workspaceId/members/$userId';
+  static String acceptInvitation(String id) => '/workspaces/$id/accept-invitation';
+  static String rejectInvitation(String id) => '/workspaces/$id/reject-invitation';
+  static const String pendingInvitations = '/workspaces/invitations/pending';
 
   // Schedule endpoints
   static String schedules(String workspaceId) => '/workspaces/$workspaceId/schedules';
