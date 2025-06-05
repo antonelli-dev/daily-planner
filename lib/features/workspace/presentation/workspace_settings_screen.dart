@@ -80,6 +80,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
     }
   }
 
+  // Replace the _updateWorkspace method in your workspace_settings_screen.dart
   Future<void> _updateWorkspace() async {
     if (_workspace == null) return;
 
@@ -90,6 +91,9 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
     }
 
     try {
+      // Show loading state
+      _showSnackBar('Updating workspace...', isLoading: true);
+
       final updateWorkspaceUseCase = GetIt.I<UpdateWorkspaceUseCase>();
       final updatedWorkspace = await updateWorkspaceUseCase(
         widget.workspaceId,
@@ -99,15 +103,30 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
             : _descriptionController.text.trim(),
       );
 
-      setState(() {
-        _workspace = updatedWorkspace;
-      });
+      if (mounted) {
+        // Hide loading snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      _showSnackBar('Workspace updated successfully!');
+        // Show success message
+        _showSnackBar('Workspace updated successfully!');
+
+        // Wait a moment for user to see the success message
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          // Navigate back to workspace selection to refresh the list
+          context.go('/workspaces');
+        }
+      }
     } catch (e) {
-      _showSnackBar('Error updating workspace: ${e.toString()}', isError: true);
+      if (mounted) {
+        // Hide loading snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        _showSnackBar('Error updating workspace: ${e.toString()}', isError: true);
+      }
     }
   }
+
 
   Future<void> _deleteWorkspace() async {
     if (_workspace == null) return;
@@ -285,22 +304,43 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
     ) ?? false;
   }
 
-  void _showSnackBar(String message, {bool isError = false}) {
+// Updated _showSnackBar method with loading support
+  void _showSnackBar(String message, {bool isError = false, bool isLoading = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(
-              isError ? Icons.error_outline : Icons.check_circle,
-              color: Colors.white,
-            ),
+            if (isLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            else
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle,
+                color: Colors.white,
+              ),
             const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white, // Fixed: Make snackbar text visible
+                  fontSize: 16,
+                ),
+              ),
+            ),
           ],
         ),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        backgroundColor: isLoading
+            ? Colors.blue
+            : (isError ? Colors.red : Colors.green),
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: isError ? 4 : 2),
+        duration: Duration(seconds: isLoading ? 3 : (isError ? 4 : 2)),
       ),
     );
   }
@@ -398,6 +438,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
     );
   }
 
+  // Replace the _buildWorkspaceDetailsCard method in your workspace_settings_screen.dart
   Widget _buildWorkspaceDetailsCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -417,12 +458,40 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
           TextFormField(
             controller: _nameController,
             enabled: _isOwner,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.black87, // Fixed: Make text visible
+              fontWeight: FontWeight.w500,
+            ),
             decoration: InputDecoration(
               labelText: 'Workspace Name',
-              prefixIcon: const Icon(Icons.business),
+              labelStyle: TextStyle(
+                color: Colors.grey.shade700, // Fixed: Make label visible
+                fontWeight: FontWeight.w500,
+              ),
+              hintText: 'Enter workspace name',
+              hintStyle: TextStyle(
+                color: Colors.grey.shade500, // Fixed: Make hint visible
+              ),
+              prefixIcon: Icon(
+                Icons.business,
+                color: Colors.grey.shade600, // Fixed: Make icon visible
+              ),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: _isOwner ? Colors.white : Colors.grey.shade50,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -430,12 +499,40 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
             controller: _descriptionController,
             enabled: _isOwner,
             maxLines: 3,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.black87, // Fixed: Make text visible
+              fontWeight: FontWeight.w500,
+            ),
             decoration: InputDecoration(
               labelText: 'Description (Optional)',
-              prefixIcon: const Icon(Icons.description),
+              labelStyle: TextStyle(
+                color: Colors.grey.shade700, // Fixed: Make label visible
+                fontWeight: FontWeight.w500,
+              ),
+              hintText: 'Describe what this workspace is for...',
+              hintStyle: TextStyle(
+                color: Colors.grey.shade500, // Fixed: Make hint visible
+              ),
+              prefixIcon: Icon(
+                Icons.description,
+                color: Colors.grey.shade600, // Fixed: Make icon visible
+              ),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: _isOwner ? Colors.white : Colors.grey.shade50,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
+              ),
             ),
           ),
           if (_isOwner) ...[
@@ -445,12 +542,20 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen> {
               height: 48,
               child: ElevatedButton.icon(
                 onPressed: _updateWorkspace,
-                icon: const Icon(Icons.save),
-                label: const Text('Save Changes'),
+                icon: const Icon(Icons.save, color: Colors.white),
+                label: const Text(
+                  'Save Changes',
+                  style: TextStyle(
+                    color: Colors.white, // Fixed: Make button text visible
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple.shade400,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 2,
                 ),
               ),
             ),

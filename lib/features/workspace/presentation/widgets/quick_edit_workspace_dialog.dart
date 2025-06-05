@@ -17,7 +17,7 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
-  final _loading = false;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -55,6 +55,7 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
@@ -63,8 +64,8 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: widget.workspace.isPersonal
-                    ? [Colors.green.shade300, Colors.blue.shade300]
-                    : [Colors.purple.shade300, Colors.pink.shade300],
+                    ? [Colors.green.shade400, Colors.blue.shade400]
+                    : [Colors.purple.shade400, Colors.blue.shade400],
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -78,7 +79,11 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
           const Expanded(
             child: Text(
               'Edit Workspace',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
             ),
           ),
         ],
@@ -93,10 +98,25 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
               TextFormField(
                 controller: _nameController,
                 enabled: !_loading,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Workspace Name',
+                  labelStyle: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
                   hintText: 'Enter workspace name',
-                  prefixIcon: const Icon(Icons.business),
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade500,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.business,
+                    color: Colors.grey.shade600,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -108,7 +128,11 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.blue.shade400, width: 2),
+                    borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.red.shade400, width: 2),
                   ),
                 ),
                 validator: (value) {
@@ -132,10 +156,25 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
                 controller: _descriptionController,
                 enabled: !_loading,
                 maxLines: 3,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Description (Optional)',
+                  labelStyle: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
                   hintText: 'Describe what this workspace is for...',
-                  prefixIcon: const Icon(Icons.description),
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade500,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.description,
+                    color: Colors.grey.shade600,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -147,7 +186,11 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.blue.shade400, width: 2),
+                    borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.red.shade400, width: 2),
                   ),
                 ),
                 validator: (value) {
@@ -164,18 +207,22 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Colors.purple.shade50,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
+                  border: Border.all(color: Colors.purple.shade200),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+                    Icon(Icons.info_outline, color: Colors.purple.shade600, size: 20),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Changes will be saved immediately and visible to all workspace members.',
-                        style: TextStyle(fontSize: 12),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.purple.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -190,15 +237,20 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
           onPressed: _loading ? null : () => Navigator.of(context).pop(),
           child: Text(
             'Cancel',
-            style: TextStyle(color: Colors.grey.shade600),
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         ElevatedButton.icon(
           onPressed: _loading ? null : _handleSave,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue.shade400,
+            backgroundColor: Colors.purple.shade400,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 2,
           ),
           icon: _loading
               ? const SizedBox(
@@ -210,7 +262,13 @@ class _QuickEditWorkspaceDialogState extends State<QuickEditWorkspaceDialog> {
             ),
           )
               : const Icon(Icons.save, size: 18),
-          label: Text(_loading ? 'Saving...' : 'Save Changes'),
+          label: Text(
+            _loading ? 'Saving...' : 'Save Changes',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );

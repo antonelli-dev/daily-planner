@@ -118,6 +118,7 @@ class _WorkspaceSelectionScreenState extends State<WorkspaceSelectionScreen> {
     }
   }
 
+// Replace the _quickEditWorkspace method in your workspace_selection_screen.dart
   Future<void> _quickEditWorkspace(Workspace workspace) async {
     final result = await showDialog<Map<String, String?>>(
       context: context,
@@ -139,7 +140,12 @@ class _WorkspaceSelectionScreenState extends State<WorkspaceSelectionScreen> {
       if (mounted) {
         _hideCurrentSnackBar();
         _showSuccessSnackBar('Workspace updated successfully!');
-        _loadData();
+
+        // Refresh the workspace list to show changes
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          _loadData(); // This will refresh the list and show the updated workspace
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -149,6 +155,8 @@ class _WorkspaceSelectionScreenState extends State<WorkspaceSelectionScreen> {
     }
   }
 
+
+// Also update the _deleteWorkspace method for better navigation
   Future<void> _deleteWorkspace(Workspace workspace) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -166,7 +174,12 @@ class _WorkspaceSelectionScreenState extends State<WorkspaceSelectionScreen> {
       if (mounted) {
         _hideCurrentSnackBar();
         _showSuccessSnackBar('Workspace "${workspace.name}" deleted successfully');
-        _loadData();
+
+        // Refresh the workspace list to remove the deleted workspace
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          _loadData(); // This will refresh the list without the deleted workspace
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -175,7 +188,6 @@ class _WorkspaceSelectionScreenState extends State<WorkspaceSelectionScreen> {
       }
     }
   }
-
   void _showWorkspaceActions(Workspace workspace) {
     showModalBottomSheet(
       context: context,

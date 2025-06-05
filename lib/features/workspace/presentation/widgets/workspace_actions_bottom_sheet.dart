@@ -48,8 +48,8 @@ class WorkspaceActionsBottomSheet extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: workspace.isPersonal
-                        ? [Colors.green.shade300, Colors.blue.shade300]
-                        : [Colors.purple.shade300, Colors.pink.shade300],
+                        ? [Colors.green.shade400, Colors.blue.shade400]
+                        : [Colors.purple.shade400, Colors.blue.shade400],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -105,7 +105,7 @@ class WorkspaceActionsBottomSheet extends StatelessWidget {
             icon: Icons.edit,
             title: 'Quick Edit',
             subtitle: 'Modify name and description',
-            color: Colors.blue.shade400,
+            color: Colors.purple.shade400,
             onTap: () {
               Navigator.pop(context);
               onEdit();
@@ -116,7 +116,7 @@ class WorkspaceActionsBottomSheet extends StatelessWidget {
             icon: Icons.settings,
             title: 'Workspace Settings',
             subtitle: 'Manage members and permissions',
-            color: Colors.orange.shade400,
+            color: Colors.blue.shade400,
             onTap: () {
               Navigator.pop(context);
               onSettings();
@@ -144,10 +144,16 @@ class WorkspaceActionsBottomSheet extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
               style: TextButton.styleFrom(
                 backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.grey.shade700,
+                foregroundColor: Colors.black87,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Cancel'),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
 
@@ -167,8 +173,16 @@ class WorkspaceActionsBottomSheet extends StatelessWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade100,
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: ListTile(
         leading: Container(
