@@ -1,4 +1,6 @@
 // lib/features/schedule/presentation/create_task_screen.dart
+// Fixed version with proper navigation results
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -73,28 +75,32 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         _populateFormWithSchedule(schedule);
       }
 
-      setState(() {
-        _workspaceMembers = members.where((m) => m.isActive).toList();
-        _existingSchedule = schedule;
-        _loadingInitial = false;
-      });
-    } catch (e) {
-      setState(() => _loadingInitial = false);
-
-      String errorMessage = e.toString().replaceAll('Exception: ', '');
-      if (errorMessage.contains('not found')) {
-        errorMessage = 'This schedule no longer exists. It may have been deleted.';
-        // Navigate back after showing error
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) context.pop();
+      if (mounted) {
+        setState(() {
+          _workspaceMembers = members.where((m) => m.isActive).toList();
+          _existingSchedule = schedule;
+          _loadingInitial = false;
         });
-      } else if (errorMessage.contains('permission') || errorMessage.contains('unauthorized')) {
-        errorMessage = 'You don\'t have permission to edit this schedule.';
-      } else if (errorMessage.contains('network')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
       }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingInitial = false);
 
-      _showErrorSnackBar(errorMessage);
+        String errorMessage = e.toString().replaceAll('Exception: ', '');
+        if (errorMessage.contains('not found')) {
+          errorMessage = 'This schedule no longer exists. It may have been deleted.';
+          // Navigate back after showing error
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) context.pop();
+          });
+        } else if (errorMessage.contains('permission') || errorMessage.contains('unauthorized')) {
+          errorMessage = 'You don\'t have permission to edit this schedule.';
+        } else if (errorMessage.contains('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+
+        _showErrorSnackBar(errorMessage);
+      }
     }
   }
 
@@ -158,6 +164,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
         if (mounted) {
           _showSuccessSnackBar('Schedule updated successfully!');
+          // Return the updated schedule so the calling screen can update its state
           context.pop(updatedSchedule);
         }
       } else {
@@ -181,6 +188,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
         if (mounted) {
           _showSuccessSnackBar('Schedule created successfully!');
+          // Return the new schedule so the calling screen can update its state
           context.pop(newSchedule);
         }
       }
@@ -251,15 +259,17 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         _showSuccessSnackBar('Schedule deleted successfully!');
 
-        // Wait a moment then navigate back
+        // Wait a moment then navigate back with 'deleted' result
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
           context.pop('deleted');
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      _showErrorSnackBar('Error deleting schedule: ${e.toString().replaceAll('Exception: ', '')}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        _showErrorSnackBar('Error deleting schedule: ${e.toString().replaceAll('Exception: ', '')}');
+      }
     }
   }
 
@@ -274,88 +284,96 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
         ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      );
+    }
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
         ),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Dismiss',
-          textColor: Colors.white,
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          },
-        ),
-      ),
-    );
+      );
+    }
   }
 
   void _showSnackBar(String message, {bool isSuccess = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle : Icons.info_outline,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                isSuccess ? Icons.check_circle : Icons.info_outline,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: isSuccess ? Colors.green : Colors.blue,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
         ),
-        backgroundColor: isSuccess ? Colors.green : Colors.blue,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      );
+    }
   }
 
   void _showLoadingSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
         ),
-        backgroundColor: Colors.blue,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+      );
+    }
   }
 
   @override

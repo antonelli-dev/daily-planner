@@ -1,5 +1,5 @@
 // lib/features/planner/presentation/tasks_screen.dart
-// Updated to use real schedule data instead of demo data
+// Fixed version with proper state management and filtering
 
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -10,6 +10,8 @@ import '../../schedule/domain/usecases/get_schedules.usecase.dart';
 import '../../schedule/domain/usecases/complete_schedule.usecase.dart';
 import '../../../core/shared/widgets/loading_widget.dart';
 import '../../../core/shared/widgets/error_widget.dart';
+
+enum ScheduleFilter { all, active, completed, overdue, today, upcoming }
 
 class TasksScreen extends StatefulWidget {
   final String? workspaceId;
@@ -23,11 +25,19 @@ class TasksScreen extends StatefulWidget {
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen> {
-  List<Schedule> _todaySchedules = [];
-  List<Schedule> _upcomingSchedules = [];
+class _TasksScreenState extends State<TasksScreen> with AutomaticKeepAliveClientMixin {
+  List<Schedule> _allSchedules = [];
+  List<Schedule> _filteredSchedules = [];
   bool _loading = true;
   String? _error;
+
+  // Filter state
+  ScheduleFilter _currentFilter = ScheduleFilter.all;
+  SchedulePriority? _priorityFilter;
+  String _searchQuery = '';
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -35,13 +45,21 @@ class _TasksScreenState extends State<TasksScreen> {
     _loadSchedules();
   }
 
+  @override
+  void didUpdateWidget(TasksScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only reload if workspace changed
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _loadSchedules();
+    }
+  }
+
   Future<void> _loadSchedules() async {
     if (widget.workspaceId == null) {
-      // If no workspace selected, show empty state
       setState(() {
         _loading = false;
-        _todaySchedules = [];
-        _upcomingSchedules = [];
+        _allSchedules = [];
+        _filteredSchedules = [];
       });
       return;
     }
@@ -54,26 +72,103 @@ class _TasksScreenState extends State<TasksScreen> {
     try {
       final getSchedulesUseCase = GetIt.I<GetSchedulesUseCase>();
 
-      // Load today's schedules
-      final todaySchedules = await getSchedulesUseCase.getTodaySchedules(widget.workspaceId!);
+      // Load a broader range for better filtering
+      final now = DateTime.now();
+      final List<Schedule> allSchedules = [];
 
-      // Load upcoming schedules (next 7 days)
-      final upcomingSchedules = await getSchedulesUseCase.getSchedulesForWeek(
-        widget.workspaceId!,
-        DateTime.now().add(const Duration(days: 1)),
-      );
+      // Load past week, today, and next month
+      for (var i = -7; i <= 30; i++) {
+        final date = now.add(Duration(days: i));
+        try {
+          final daySchedules = await getSchedulesUseCase(widget.workspaceId!, date: date);
+          allSchedules.addAll(daySchedules);
+        } catch (e) {
+          // Continue loading other days if one fails
+          print('Error loading schedules for $date: $e');
+        }
+      }
 
-      setState(() {
-        _todaySchedules = todaySchedules;
-        _upcomingSchedules = upcomingSchedules.take(5).toList(); // Limit to 5 for overview
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allSchedules = allSchedules;
+          _filteredSchedules = _applyFilters(allSchedules);
+          _loading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
+  }
+
+  List<Schedule> _applyFilters(List<Schedule> schedules) {
+    var filtered = List<Schedule>.from(schedules);
+
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((schedule) {
+        return schedule.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            (schedule.description?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
+      }).toList();
+    }
+
+    // Apply status filter
+    switch (_currentFilter) {
+      case ScheduleFilter.all:
+        break;
+      case ScheduleFilter.active:
+        filtered = filtered.where((s) => s.isInProgress).toList();
+        break;
+      case ScheduleFilter.completed:
+        filtered = filtered.where((s) => s.isCompleted).toList();
+        break;
+      case ScheduleFilter.overdue:
+        filtered = filtered.where((s) => s.isOverdue).toList();
+        break;
+      case ScheduleFilter.today:
+        filtered = filtered.where((s) => s.isToday).toList();
+        break;
+      case ScheduleFilter.upcoming:
+        filtered = filtered.where((s) => s.isUpcoming).toList();
+        break;
+    }
+
+    // Apply priority filter
+    if (_priorityFilter != null) {
+      filtered = filtered.where((s) => s.priority == _priorityFilter).toList();
+    }
+
+    // Sort by date and priority
+    filtered.sort((a, b) {
+      // Completed items go to bottom
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+
+      // Then by priority (high first)
+      const priorityOrder = {
+        SchedulePriority.high: 3,
+        SchedulePriority.medium: 2,
+        SchedulePriority.low: 1,
+      };
+      final priorityComparison = (priorityOrder[b.priority] ?? 0) - (priorityOrder[a.priority] ?? 0);
+      if (priorityComparison != 0) return priorityComparison;
+
+      // Finally by start time
+      return a.startTime.compareTo(b.startTime);
+    });
+
+    return filtered;
+  }
+
+  void _updateFilters() {
+    setState(() {
+      _filteredSchedules = _applyFilters(_allSchedules);
+    });
   }
 
   Future<void> _completeSchedule(Schedule schedule) async {
@@ -82,33 +177,90 @@ class _TasksScreenState extends State<TasksScreen> {
       await completeScheduleUseCase(widget.workspaceId!, schedule.id);
 
       _showSnackBar('Schedule marked as completed!', isSuccess: true);
-      _loadSchedules(); // Refresh data
+
+      // Update the local state immediately for better UX
+      if (mounted) {
+        setState(() {
+          final index = _allSchedules.indexWhere((s) => s.id == schedule.id);
+          if (index != -1) {
+            _allSchedules[index] = schedule.copyWith(
+              isCompleted: true,
+              completedAt: DateTime.now(),
+            );
+            _filteredSchedules = _applyFilters(_allSchedules);
+          }
+        });
+      }
     } catch (e) {
       _showSnackBar('Error completing schedule: ${e.toString()}', isError: true);
     }
   }
 
-  void _showSnackBar(String message, {bool isError = false, bool isSuccess = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isError ? Icons.error_outline : (isSuccess ? Icons.check_circle : Icons.info_outline),
-              color: Colors.white,
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: isError ? Colors.red : (isSuccess ? Colors.green : Colors.blue),
-        behavior: SnackBarBehavior.floating,
-      ),
+  Future<void> _navigateToEditSchedule(Schedule schedule) async {
+    final result = await context.push('/workspace/${widget.workspaceId}/schedule/${schedule.id}/edit');
+
+    // Handle the result properly
+    if (result != null && mounted) {
+      if (result == 'deleted') {
+        _showSnackBar('Schedule deleted successfully!', isSuccess: true);
+        // Remove from local state
+        setState(() {
+          _allSchedules.removeWhere((s) => s.id == schedule.id);
+          _filteredSchedules = _applyFilters(_allSchedules);
+        });
+      } else if (result is Schedule) {
+        _showSnackBar('Schedule updated successfully!', isSuccess: true);
+        // Update local state with the updated schedule
+        setState(() {
+          final index = _allSchedules.indexWhere((s) => s.id == schedule.id);
+          if (index != -1) {
+            _allSchedules[index] = result;
+            _filteredSchedules = _applyFilters(_allSchedules);
+          }
+        });
+      }
+      // Refresh to ensure we have the latest data
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _loadSchedules();
+      });
+    }
+  }
+
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _buildFilterBottomSheet(),
     );
+  }
+
+  void _showSnackBar(String message, {bool isError = false, bool isSuccess = false}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                isError ? Icons.error_outline : (isSuccess ? Icons.check_circle : Icons.info_outline),
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: isError ? Colors.red : (isSuccess ? Colors.green : Colors.blue),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: isError ? 4 : 2),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     final user = Supabase.instance.client.auth.currentUser;
     final userName = user?.userMetadata?['full_name'] ??
         user?.email?.split('@')[0] ?? 'Usuario';
@@ -125,65 +277,325 @@ class _TasksScreenState extends State<TasksScreen> {
   }
 
   Widget _buildBody(String userName) {
-    return SingleChildScrollView(
+    return Column(
+      children: [
+        // Search and filter header
+        _buildSearchAndFilterHeader(),
+
+        // Active filters chips
+        if (_currentFilter != ScheduleFilter.all || _priorityFilter != null || _searchQuery.isNotEmpty)
+          _buildActiveFilters(),
+
+        // Main content
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+
+                // Header with user info
+                _buildUserInfo(userName),
+                const SizedBox(height: 24),
+
+                // Workspace info
+                if (widget.workspaceId != null) ...[
+                  _buildWorkspaceInfo(),
+                  const SizedBox(height: 24),
+                ],
+
+                // Progress card
+                _buildProgressCard(),
+                const SizedBox(height: 32),
+
+                // Schedules section
+                if (_loading)
+                  const LoadingWidget(message: 'Loading schedules...')
+                else if (_error != null)
+                  CustomErrorWidget.generic(
+                    message: _error!,
+                    onRetry: _loadSchedules,
+                  )
+                else if (widget.workspaceId == null)
+                    _buildNoWorkspaceState()
+                  else ...[
+                      // Schedules list
+                      if (_filteredSchedules.isNotEmpty) ...[
+                        _buildSectionTitle('Schedules', _filteredSchedules.length),
+                        const SizedBox(height: 16),
+                        ..._filteredSchedules.map(_buildScheduleCard),
+                        const SizedBox(height: 32),
+                      ],
+
+                      // No results state
+                      if (_filteredSchedules.isEmpty && _allSchedules.isNotEmpty)
+                        _buildNoResultsState(),
+
+                      // Empty state
+                      if (_allSchedules.isEmpty)
+                        _buildEmptySchedulesState(),
+                    ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchAndFilterHeader() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade100,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+                _updateFilters();
+              },
+              decoration: InputDecoration(
+                hintText: 'Search schedules...',
+                prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.purple.shade400,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              onPressed: _showFilterBottomSheet,
+              icon: const Icon(Icons.filter_list, color: Colors.white),
+              tooltip: 'Filters',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveFilters() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          if (_currentFilter != ScheduleFilter.all)
+            _buildFilterChip(
+              _getFilterName(_currentFilter),
+                  () {
+                setState(() {
+                  _currentFilter = ScheduleFilter.all;
+                });
+                _updateFilters();
+              },
+            ),
+          if (_priorityFilter != null)
+            _buildFilterChip(
+              '${_priorityFilter!.displayName} Priority',
+                  () {
+                setState(() {
+                  _priorityFilter = null;
+                });
+                _updateFilters();
+              },
+            ),
+          if (_searchQuery.isNotEmpty)
+            _buildFilterChip(
+              'Search: "${_searchQuery.length > 10 ? '${_searchQuery.substring(0, 10)}...' : _searchQuery}"',
+                  () {
+                setState(() {
+                  _searchQuery = '';
+                });
+                _updateFilters();
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Chip(
+      label: Text(label),
+      deleteIcon: const Icon(Icons.close, size: 16),
+      onDeleted: onRemove,
+      backgroundColor: Colors.purple.shade100,
+      labelStyle: TextStyle(color: Colors.purple.shade700, fontSize: 12),
+      deleteIconColor: Colors.purple.shade700,
+    );
+  }
+
+  String _getFilterName(ScheduleFilter filter) {
+    switch (filter) {
+      case ScheduleFilter.all:
+        return 'All';
+      case ScheduleFilter.active:
+        return 'Active';
+      case ScheduleFilter.completed:
+        return 'Completed';
+      case ScheduleFilter.overdue:
+        return 'Overdue';
+      case ScheduleFilter.today:
+        return 'Today';
+      case ScheduleFilter.upcoming:
+        return 'Upcoming';
+    }
+  }
+
+  Widget _buildFilterBottomSheet() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       padding: const EdgeInsets.all(20),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          const Text(
+            'Filter Schedules',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 20),
 
-          // Header with user info and workspace info
-          _buildUserInfo(userName),
-          const SizedBox(height: 24),
+          // Status filter
+          const Text(
+            'Status',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ScheduleFilter.values.map((filter) {
+              final isSelected = _currentFilter == filter;
+              return FilterChip(
+                label: Text(_getFilterName(filter)),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    _currentFilter = filter;
+                  });
+                  _updateFilters();
+                },
+                selectedColor: Colors.purple.shade100,
+                checkmarkColor: Colors.purple.shade700,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
 
-          // Workspace info (if available)
-          if (widget.workspaceId != null) ...[
-            _buildWorkspaceInfo(),
-            const SizedBox(height: 24),
-          ],
-
-          // Today's progress card with real data
-          _buildProgressCard(),
+          // Priority filter
+          const Text(
+            'Priority',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('All Priorities'),
+                selected: _priorityFilter == null,
+                onSelected: (selected) {
+                  setState(() {
+                    _priorityFilter = null;
+                  });
+                  _updateFilters();
+                },
+                selectedColor: Colors.purple.shade100,
+                checkmarkColor: Colors.purple.shade700,
+              ),
+              ...SchedulePriority.values.map((priority) {
+                final isSelected = _priorityFilter == priority;
+                return FilterChip(
+                  label: Text('${priority.displayName} Priority'),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      _priorityFilter = selected ? priority : null;
+                    });
+                    _updateFilters();
+                  },
+                  selectedColor: Colors.purple.shade100,
+                  checkmarkColor: Colors.purple.shade700,
+                );
+              }),
+            ],
+          ),
           const SizedBox(height: 32),
 
-          // Today's schedules section
-          if (_loading)
-            const LoadingWidget(message: 'Loading schedules...')
-          else if (_error != null)
-            CustomErrorWidget.generic(
-              message: _error!,
-              onRetry: _loadSchedules,
-            )
-          else if (widget.workspaceId == null)
-              _buildNoWorkspaceState()
-            else ...[
-                // Today's schedules
-                if (_todaySchedules.isNotEmpty) ...[
-                  _buildSectionTitle('Today\'s Schedule', _todaySchedules.length),
-                  const SizedBox(height: 16),
-                  ..._todaySchedules.map(_buildScheduleCard),
-                  const SizedBox(height: 32),
-                ],
+          // Clear all filters button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                setState(() {
+                  _currentFilter = ScheduleFilter.all;
+                  _priorityFilter = null;
+                  _searchQuery = '';
+                });
+                _updateFilters();
+                Navigator.pop(context);
+              },
+              child: const Text('Clear All Filters'),
+            ),
+          ),
 
-                // Upcoming schedules
-                if (_upcomingSchedules.isNotEmpty) ...[
-                  _buildSectionTitle('Upcoming', _upcomingSchedules.length),
-                  const SizedBox(height: 16),
-                  ..._upcomingSchedules.map(_buildScheduleCard),
-                  const SizedBox(height: 16),
-                  _buildViewAllButton(),
-                  const SizedBox(height: 32),
-                ],
-
-                // Empty state if no schedules
-                if (_todaySchedules.isEmpty && _upcomingSchedules.isEmpty)
-                  _buildEmptySchedulesState(),
-
-                // Legacy task groups (keep for now if you want to show them alongside schedules)
-                _buildSectionTitle('Task Groups', 4),
-                const SizedBox(height: 16),
-                _buildTaskGroups(),
-              ],
+          // Safe area padding
+          SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],
       ),
     );
@@ -229,7 +641,6 @@ class _TasksScreenState extends State<TasksScreen> {
           ),
         ),
         if (widget.workspaceId != null) ...[
-          // Calendar view button
           IconButton(
             onPressed: () => context.push('/workspace/${widget.workspaceId}/calendar'),
             icon: Icon(
@@ -239,11 +650,12 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
             tooltip: 'Calendar View',
           ),
-          // Add schedule button
           IconButton(
             onPressed: () async {
-              await context.push('/workspace/${widget.workspaceId}/create-schedule');
-              _loadSchedules();
+              final result = await context.push('/workspace/${widget.workspaceId}/create-schedule');
+              if (result != null && mounted) {
+                _loadSchedules();
+              }
             },
             icon: Container(
               width: 40,
@@ -346,9 +758,8 @@ class _TasksScreenState extends State<TasksScreen> {
   }
 
   Widget _buildProgressCard() {
-    // Use real schedule data for progress calculation
-    final completedToday = _todaySchedules.where((s) => s.isCompleted).length;
-    final totalToday = _todaySchedules.length;
+    final completedToday = _allSchedules.where((s) => s.isToday && s.isCompleted).length;
+    final totalToday = _allSchedules.where((s) => s.isToday).length;
     final progress = totalToday > 0 ? completedToday / totalToday : 0.0;
 
     return Container(
@@ -532,17 +943,11 @@ class _TasksScreenState extends State<TasksScreen> {
                     color: Colors.grey.shade600,
                   ),
                 ),
+                const SizedBox(width: 8),
+                _buildPriorityChip(schedule.priority),
                 if (schedule.isAssigned) ...[
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Icon(Icons.person, size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 4),
-                  Text(
-                    schedule.assignedToName ?? 'Assigned',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
                 ],
               ],
             ),
@@ -572,7 +977,38 @@ class _TasksScreenState extends State<TasksScreen> {
           ),
           tooltip: 'Mark as completed',
         ),
-        onTap: () => context.push('/workspace/${widget.workspaceId}/schedule/${schedule.id}/edit'),
+        onTap: () => _navigateToEditSchedule(schedule),
+      ),
+    );
+  }
+
+  Widget _buildPriorityChip(SchedulePriority priority) {
+    Color color;
+    switch (priority) {
+      case SchedulePriority.high:
+        color = Colors.red.shade600;
+        break;
+      case SchedulePriority.medium:
+        color = Colors.orange.shade600;
+        break;
+      case SchedulePriority.low:
+        color = Colors.green.shade600;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        priority.displayName,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }
@@ -649,23 +1085,6 @@ class _TasksScreenState extends State<TasksScreen> {
     );
   }
 
-  Widget _buildViewAllButton() {
-    return Container(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton.icon(
-        onPressed: () => context.push('/workspace/${widget.workspaceId}/calendar'),
-        icon: const Icon(Icons.calendar_view_month),
-        label: const Text('View All in Calendar'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.purple.shade400,
-          side: BorderSide(color: Colors.purple.shade400),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-    );
-  }
-
   Widget _buildNoWorkspaceState() {
     return Center(
       child: Padding(
@@ -707,6 +1126,61 @@ class _TasksScreenState extends State<TasksScreen> {
             ElevatedButton(
               onPressed: () => context.go('/workspaces'),
               child: const Text('Select Workspace'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoResultsState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(40),
+              ),
+              child: Icon(
+                Icons.search_off,
+                size: 40,
+                color: Colors.orange.shade400,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No schedules found',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Try adjusting your filters or search terms',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () {
+                setState(() {
+                  _currentFilter = ScheduleFilter.all;
+                  _priorityFilter = null;
+                  _searchQuery = '';
+                });
+                _updateFilters();
+              },
+              child: const Text('Clear Filters'),
             ),
           ],
         ),
@@ -759,121 +1233,6 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  // Keep your existing demo task groups for now (can be removed later)
-  Widget _buildTaskGroups() {
-    return Column(
-      children: [
-        _buildTaskGroupItem(
-          'Office Project',
-          '23 Tasks',
-          Colors.pink.shade100,
-          Colors.pink.shade400,
-          Icons.work_outline,
-          0.70,
-        ),
-        const SizedBox(height: 12),
-        _buildTaskGroupItem(
-          'Personal Project',
-          '30 Tasks',
-          Colors.purple.shade100,
-          Colors.purple.shade400,
-          Icons.person_outline,
-          0.52,
-        ),
-        const SizedBox(height: 12),
-        _buildTaskGroupItem(
-          'Daily Study',
-          '30 Tasks',
-          Colors.orange.shade100,
-          Colors.orange.shade400,
-          Icons.school_outlined,
-          0.87,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTaskGroupItem(String title, String subtitle, Color bgColor, Color accentColor, IconData icon, double progress) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade100,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: accentColor,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 50,
-                height: 50,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 4,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                ),
-              ),
-              Text(
-                '${(progress * 100).round()}%',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: accentColor,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
