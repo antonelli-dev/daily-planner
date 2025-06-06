@@ -104,8 +104,8 @@ class Schedule {
       icon: json['icon'] as String,
       priority: SchedulePriorityExtension.fromString(json['priority'] as String),
       assignedTo: json['assignedTo'] as String?,
-      isCompleted: json['isCompleted'] as bool,
-      isRecurring: json['isRecurring'] as bool,
+      isCompleted: json['isCompleted'] == true,
+      isRecurring: json['isRecurring'] == true,
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'] as String)
           : null,
@@ -289,7 +289,7 @@ class CreateScheduleRequest {
       'title': title,
       'description': description,
       'date': AppDateUtils.formatForApi(date),
-      'startTime': startTime.toIso8601String(),
+      'startTime': AppDateUtils.formatTimeForApi(startTime),
       'durationMinutes': durationMinutes,
       'color': color,
       'icon': icon,

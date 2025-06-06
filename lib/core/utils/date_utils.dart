@@ -16,8 +16,16 @@ class AppDateUtils {
 
   // Format for API
   static String formatForApi(DateTime date) {
-    return _apiDateFormatter.format(date);
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
   }
+
+  static String formatTimeForApi(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}';
+  }
+
 
   static String formatDateTimeForApi(DateTime dateTime) {
     return _apiDateTimeFormatter.format(dateTime);
@@ -187,6 +195,8 @@ class AppDateUtils {
       return false;
     }
   }
+
+
 
   static bool isValidTimeString(String timeString) {
     try {

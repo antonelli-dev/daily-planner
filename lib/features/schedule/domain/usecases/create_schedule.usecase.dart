@@ -2,6 +2,7 @@
 import '../entities/schedule.entity.dart';
 import '../repositories/schedule.repository.dart';
 
+
 class CreateScheduleUseCase {
   final ScheduleRepository repository;
 

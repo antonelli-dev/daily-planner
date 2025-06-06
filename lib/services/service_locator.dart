@@ -25,6 +25,17 @@ import '../features/workspace/domain/usecases/get_pending_invitations.usecase.da
 import '../features/workspace/domain/usecases/accept_invitation.usecase.dart';
 import '../features/workspace/domain/usecases/reject_invitation.usecase.dart';
 
+import '../features/schedule/data/schedule_repository_impl.dart';
+import '../features/schedule/domain/repositories/schedule.repository.dart';
+import '../features/schedule/domain/usecases/get_schedules.usecase.dart';
+import '../features/schedule/domain/usecases/complete_schedule.usecase.dart';
+import '../features/schedule/domain/usecases/assign_schedule.usecase.dart';
+import '../features/schedule/domain/usecases/create_schedule.usecase.dart';
+import '../features/schedule/domain/usecases/delete_schedule.usecase.dart';
+import '../features/schedule/domain/usecases/get_schedule_by_id.usecase.dart';
+import '../features/schedule/domain/usecases/update_schedule.usecase.dart';
+
+
 final GetIt getIt = GetIt.instance;
 
 void setupServiceLocator() {
@@ -40,17 +51,29 @@ void setupServiceLocator() {
 
   // Workspace repositories and use cases
   getIt.registerLazySingleton<WorkspaceRepository>(() => WorkspaceRepositoryImpl(getIt<ApiClient>()));
+  getIt.registerLazySingleton<ScheduleRepository>(
+        () => ScheduleRepositoryImpl(getIt<ApiClient>()),
+  );
 
   // Workspace use cases - using correct class names
   getIt.registerLazySingleton(() => GetWorkspacesUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => CreateWorkspaceUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => UpdateWorkspaceUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => DeleteWorkspaceUseCase(getIt<WorkspaceRepository>()));
-  getIt.registerLazySingleton(() => GetWorkspaceUseCase(getIt<WorkspaceRepository>())); // This might be GetWorkspaceByIdUseCase
+  getIt.registerLazySingleton(() => GetWorkspaceUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => InviteMemberUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => RemoveMemberUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => GetWorkspaceMembersUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => GetPendingInvitationsUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => AcceptInvitationUseCase(getIt<WorkspaceRepository>()));
   getIt.registerLazySingleton(() => RejectInvitationUseCase(getIt<WorkspaceRepository>()));
+
+  // Schedule use cases
+  getIt.registerLazySingleton(() => GetSchedulesUseCase(getIt<ScheduleRepository>()));
+  getIt.registerLazySingleton(() => GetScheduleByIdUseCase(getIt<ScheduleRepository>()));
+  getIt.registerLazySingleton(() => CreateScheduleUseCase(getIt<ScheduleRepository>()));
+  getIt.registerLazySingleton(() => UpdateScheduleUseCase(getIt<ScheduleRepository>()));
+  getIt.registerLazySingleton(() => DeleteScheduleUseCase(getIt<ScheduleRepository>()));
+  getIt.registerLazySingleton(() => CompleteScheduleUseCase(getIt<ScheduleRepository>()));
+  getIt.registerLazySingleton(() => AssignScheduleUseCase(getIt<ScheduleRepository>()));
 }

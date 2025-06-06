@@ -1,3 +1,4 @@
+// lib/routes/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,9 +10,9 @@ import '../features/auth/presentation/register_page.dart';
 import '../features/workspace/presentation/workspace_selection_screen.dart';
 import '../features/workspace/presentation/create_workspace_screen.dart';
 import '../features/workspace/presentation/workspace_settings_screen.dart';
-// TODO: Import schedule screens when implemented
-// import '../features/schedule/presentation/enhanced_tasks_screen.dart';
-// import '../features/schedule/presentation/create_task_screen.dart';
+// Schedule screens
+import '../features/schedule/presentation/create_task_screen.dart';
+import '../features/schedule/presentation/calendar_view_screen.dart';
 
 // Create a ChangeNotifier for auth state
 class AuthChangeNotifier extends ChangeNotifier {
@@ -67,7 +68,7 @@ final appRouter = GoRouter(
       path: '/workspace/:id',
       builder: (context, state) {
         final workspaceId = state.pathParameters['id']!;
-        return HomeScreen(workspaceId: workspaceId); // Update HomeScreen to accept workspaceId
+        return HomeScreen(workspaceId: workspaceId);
       },
     ),
     GoRoute(
@@ -75,6 +76,33 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final workspaceId = state.pathParameters['id']!;
         return WorkspaceSettingsScreen(workspaceId: workspaceId);
+      },
+    ),
+
+    // Schedule routes
+    GoRoute(
+      path: '/workspace/:workspaceId/create-schedule',
+      builder: (context, state) {
+        final workspaceId = state.pathParameters['workspaceId']!;
+        return CreateTaskScreen(workspaceId: workspaceId);
+      },
+    ),
+    GoRoute(
+      path: '/workspace/:workspaceId/schedule/:scheduleId/edit',
+      builder: (context, state) {
+        final workspaceId = state.pathParameters['workspaceId']!;
+        final scheduleId = state.pathParameters['scheduleId']!;
+        return CreateTaskScreen(
+          workspaceId: workspaceId,
+          scheduleId: scheduleId,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/workspace/:workspaceId/calendar',
+      builder: (context, state) {
+        final workspaceId = state.pathParameters['workspaceId']!;
+        return CalendarViewScreen(workspaceId: workspaceId);
       },
     ),
 
@@ -87,14 +115,5 @@ final appRouter = GoRouter(
       path: '/tasks',
       builder: (context, state) => const TasksScreen(),
     ),
-
-    // TODO: Add schedule routes when implemented
-    // GoRoute(
-    //   path: '/workspace/:workspaceId/create-task',
-    //   builder: (context, state) {
-    //     final workspaceId = state.pathParameters['workspaceId']!;
-    //     return CreateTaskScreen(workspaceId: workspaceId);
-    //   },
-    // ),
   ],
 );

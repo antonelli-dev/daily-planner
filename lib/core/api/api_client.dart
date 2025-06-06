@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
 import '../models/api_response.dart';
 
 class ApiClient {
@@ -9,7 +10,11 @@ class ApiClient {
   ApiClient(this._client);
 
   // Base URL for your API
-  String get baseUrl => 'http://localhost:3000/api/v1';
+
+  final String baseUrl = Platform.isAndroid
+      ? 'http://10.0.2.2:3000/api/v1'
+      : 'http://localhost:3000/api/v1';
+
 
   // Helper method to get current user ID
   String get currentUserId {
