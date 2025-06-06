@@ -328,7 +328,7 @@ class UpdateScheduleRequest {
     if (title != null) json['title'] = title;
     if (description != null) json['description'] = description;
     if (date != null) json['date'] = AppDateUtils.formatForApi(date!);
-    if (startTime != null) json['startTime'] = startTime!.toIso8601String();
+    if (startTime != null) json['startTime'] = AppDateUtils.formatTimeForApi(startTime!);
     if (durationMinutes != null) json['durationMinutes'] = durationMinutes;
     if (color != null) json['color'] = color;
     if (icon != null) json['icon'] = icon;
