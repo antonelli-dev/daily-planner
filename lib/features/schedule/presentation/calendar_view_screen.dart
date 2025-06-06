@@ -112,21 +112,44 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
     }
   }
 
+  Future<void> _navigateToEditSchedule(Schedule schedule) async {
+    final result = await context.push(
+        '/workspace/${widget.workspaceId}/schedule/${schedule.id}/edit'
+    );
+
+    // Handle different types of results
+    if (result != null) {
+      if (result == 'deleted') {
+        _showSnackBar('Schedule deleted successfully!', isSuccess: true);
+      } else if (result is Schedule) {
+        _showSnackBar('Schedule updated successfully!', isSuccess: true);
+      }
+
+      // Refresh the calendar view
+      _loadSchedules();
+    }
+  }
+
   void _showSnackBar(String message, {bool isError = false, bool isSuccess = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Icon(
-              isError ? Icons.error_outline : (isSuccess ? Icons.check_circle : Icons.info_outline),
+              isError
+                  ? Icons.error_outline
+                  : (isSuccess ? Icons.check_circle : Icons.info_outline),
               color: Colors.white,
             ),
             const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: isError ? Colors.red : (isSuccess ? Colors.green : Colors.blue),
+        backgroundColor: isError
+            ? Colors.red
+            : (isSuccess ? Colors.green : Colors.blue),
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 4 : 2),
       ),
     );
   }
@@ -159,72 +182,156 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
     _loadSchedules();
   }
 
+  void _goToToday() {
+    setState(() {
+      _selectedDate = DateTime.now();
+      _focusedDate = DateTime.now();
+    });
+    _loadSchedules();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: Text(
-          _getAppBarTitle(),
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        shadowColor: Colors.grey.shade300,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: Colors.grey.shade700),
-        actions: [
-          PopupMenuButton<CalendarView>(
-            icon: Icon(Icons.view_module, color: Colors.grey.shade700),
-            onSelected: _changeView,
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: CalendarView.month,
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_view_month),
-                    SizedBox(width: 12),
-                    Text('Month View'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: CalendarView.week,
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_view_week),
-                    SizedBox(width: 12),
-                    Text('Week View'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: CalendarView.day,
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_view_day),
-                    SizedBox(width: 12),
-                    Text('Day View'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/workspace/${widget.workspaceId}/create-schedule'),
+        onPressed: () async {
+          final result = await context.push('/workspace/${widget.workspaceId}/create-schedule');
+          if (result != null) {
+            _loadSchedules(); // Refresh after creating
+          }
+        },
         backgroundColor: Colors.purple.shade400,
         child: const Icon(Icons.add, color: Colors.white),
         tooltip: 'Create Schedule',
       ),
     );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: Text(
+        _getAppBarTitle(),
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+      ),
+      centerTitle: true,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      shadowColor: Colors.grey.shade300,
+      surfaceTintColor: Colors.transparent,
+      iconTheme: IconThemeData(color: Colors.grey.shade700),
+      actions: [
+        // View mode selector
+        PopupMenuButton<CalendarView>(
+          icon: Icon(
+            _getViewIcon(),
+            color: Colors.grey.shade700,
+          ),
+          onSelected: _changeView,
+          tooltip: 'Change View',
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: CalendarView.month,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_view_month,
+                    color: _currentView == CalendarView.month
+                        ? Colors.purple.shade400
+                        : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Month View',
+                    style: TextStyle(
+                      color: _currentView == CalendarView.month
+                          ? Colors.purple.shade400
+                          : Colors.black87,
+                      fontWeight: _currentView == CalendarView.month
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: CalendarView.week,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_view_week,
+                    color: _currentView == CalendarView.week
+                        ? Colors.purple.shade400
+                        : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Week View',
+                    style: TextStyle(
+                      color: _currentView == CalendarView.week
+                          ? Colors.purple.shade400
+                          : Colors.black87,
+                      fontWeight: _currentView == CalendarView.week
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: CalendarView.day,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_view_day,
+                    color: _currentView == CalendarView.day
+                        ? Colors.purple.shade400
+                        : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Day View',
+                    style: TextStyle(
+                      color: _currentView == CalendarView.day
+                          ? Colors.purple.shade400
+                          : Colors.black87,
+                      fontWeight: _currentView == CalendarView.day
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        // Refresh button
+        IconButton(
+          onPressed: _loadSchedules,
+          icon: Icon(Icons.refresh, color: Colors.grey.shade700),
+          tooltip: 'Refresh',
+        ),
+      ],
+    );
+  }
+
+  IconData _getViewIcon() {
+    switch (_currentView) {
+      case CalendarView.month:
+        return Icons.calendar_view_month;
+      case CalendarView.week:
+        return Icons.calendar_view_week;
+      case CalendarView.day:
+        return Icons.calendar_view_day;
+    }
   }
 
   String _getAppBarTitle() {
@@ -288,24 +395,28 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
       ),
       child: Row(
         children: [
+          // Previous button
           IconButton(
             onPressed: () => _navigateDate(false),
             icon: const Icon(Icons.chevron_left),
             color: Colors.grey.shade700,
+            tooltip: 'Previous ${_currentView.name}',
           ),
+
+          // Current period indicator
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = DateTime.now();
-                      _focusedDate = DateTime.now();
-                    });
-                    _loadSchedules();
-                  },
-                  child: Text(
+                // Today button
+                TextButton.icon(
+                  onPressed: _goToToday,
+                  icon: Icon(
+                    Icons.today,
+                    size: 16,
+                    color: Colors.purple.shade400,
+                  ),
+                  label: Text(
                     'Today',
                     style: TextStyle(
                       color: Colors.purple.shade400,
@@ -316,10 +427,13 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
               ],
             ),
           ),
+
+          // Next button
           IconButton(
             onPressed: () => _navigateDate(true),
             icon: const Icon(Icons.chevron_right),
             color: Colors.grey.shade700,
+            tooltip: 'Next ${_currentView.name}',
           ),
         ],
       ),
@@ -368,15 +482,22 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
               final day = calendarDays[index];
               final isCurrentMonth = day.month == _focusedDate.month;
               final isToday = AppDateUtils.isToday(day);
+              final isSelected = _selectedDate.year == day.year &&
+                  _selectedDate.month == day.month &&
+                  _selectedDate.day == day.day;
               final daySchedules = _schedules.where((s) =>
               s.date.year == day.year &&
                   s.date.month == day.month &&
                   s.date.day == day.day
               ).toList();
 
-              return _buildMonthDayCell(day, isCurrentMonth, isToday, daySchedules);
+              return _buildMonthDayCell(day, isCurrentMonth, isToday, isSelected, daySchedules);
             },
           ),
+
+          // Selected day schedules (if any)
+          if (_selectedDate.month == _focusedDate.month)
+            _buildSelectedDaySchedules(),
         ],
       ),
     );
@@ -400,9 +521,16 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
     );
   }
 
-  Widget _buildMonthDayCell(DateTime day, bool isCurrentMonth, bool isToday, List<Schedule> daySchedules) {
+  Widget _buildMonthDayCell(DateTime day, bool isCurrentMonth, bool isToday, bool isSelected, List<Schedule> daySchedules) {
     return GestureDetector(
       onTap: () {
+        setState(() {
+          _selectedDate = day;
+        });
+
+        // If double tap, go to day view
+      },
+      onDoubleTap: () {
         setState(() {
           _selectedDate = day;
           _currentView = CalendarView.day;
@@ -411,16 +539,21 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: isToday
+          color: isSelected
+              ? Colors.purple.shade100
+              : isToday
               ? Colors.purple.shade400
               : isCurrentMonth
               ? Colors.white
               : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isToday
+            color: isSelected
+                ? Colors.purple.shade400
+                : isToday
                 ? Colors.purple.shade400
                 : Colors.grey.shade200,
+            width: isSelected || isToday ? 2 : 1,
           ),
         ),
         child: Column(
@@ -433,6 +566,8 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                 fontWeight: FontWeight.w600,
                 color: isToday
                     ? Colors.white
+                    : isSelected
+                    ? Colors.purple.shade700
                     : isCurrentMonth
                     ? Colors.black87
                     : Colors.grey.shade400,
@@ -440,17 +575,90 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
             ),
             if (daySchedules.isNotEmpty) ...[
               const SizedBox(height: 2),
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: isToday ? Colors.white : Colors.purple.shade400,
-                  borderRadius: BorderRadius.circular(3),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ...daySchedules.take(3).map((schedule) => Container(
+                    width: 4,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    decoration: BoxDecoration(
+                      color: _parseColor(schedule.color),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  )),
+                  if (daySchedules.length > 3)
+                    Text(
+                      '+${daySchedules.length - 3}',
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: isToday ? Colors.white : Colors.grey.shade600,
+                      ),
+                    ),
+                ],
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedDaySchedules() {
+    final selectedDaySchedules = _schedules.where((s) =>
+    s.date.year == _selectedDate.year &&
+        s.date.month == _selectedDate.month &&
+        s.date.day == _selectedDate.day
+    ).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    if (selectedDaySchedules.isEmpty) {
+      return Container(
+        margin: const EdgeInsets.only(top: 20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_note,
+              size: 32,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No schedules for ${AppDateUtils.formatSmart(_selectedDate)}',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              'Schedules for ${AppDateUtils.formatSmart(_selectedDate)}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...selectedDaySchedules.map(_buildScheduleCard),
+        ],
       ),
     );
   }
@@ -467,6 +675,9 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
           Row(
             children: weekDays.map((day) {
               final isToday = AppDateUtils.isToday(day);
+              final isSelected = _selectedDate.year == day.year &&
+                  _selectedDate.month == day.month &&
+                  _selectedDate.day == day.day;
               final daySchedules = _schedules.where((s) =>
               s.date.year == day.year &&
                   s.date.month == day.month &&
@@ -486,9 +697,17 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 2),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: isToday ? Colors.purple.shade400 : Colors.white,
+                      color: isSelected
+                          ? Colors.purple.shade100
+                          : isToday
+                          ? Colors.purple.shade400
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(
+                        color: isSelected || isToday
+                            ? Colors.purple.shade400
+                            : Colors.grey.shade200,
+                      ),
                     ),
                     child: Column(
                       children: [
@@ -506,17 +725,30 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isToday ? Colors.white : Colors.black87,
+                            color: isToday
+                                ? Colors.white
+                                : isSelected
+                                ? Colors.purple.shade700
+                                : Colors.black87,
                           ),
                         ),
                         if (daySchedules.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Container(
-                            width: 6,
-                            height: 6,
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
-                              color: isToday ? Colors.white : Colors.purple.shade400,
-                              borderRadius: BorderRadius.circular(3),
+                              color: isToday
+                                  ? Colors.white.withOpacity(0.2)
+                                  : Colors.purple.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${daySchedules.length}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isToday ? Colors.white : Colors.purple.shade700,
+                              ),
                             ),
                           ),
                         ],
@@ -554,7 +786,7 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
           // Date header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Colors.purple.shade400, Colors.purple.shade600],
@@ -572,12 +804,37 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  '${daySchedules.length} schedule${daySchedules.length != 1 ? 's' : ''}',
+                  AppDateUtils.formatForDisplay(_selectedDate),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 14,
                   ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                   const Icon(Icons.event, color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${daySchedules.length} schedule${daySchedules.length != 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (daySchedules.isNotEmpty) ...[
+                      Text(
+                        '${daySchedules.where((s) => s.isCompleted).length} completed',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -641,16 +898,34 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(
-              schedule.timeRange,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  schedule.timeRange,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (schedule.isAssigned) ...[
+                  const SizedBox(width: 12),
+                  Icon(Icons.person, size: 14, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    schedule.assignedToName ?? 'Assigned',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ],
             ),
             if (schedule.description != null && schedule.description!.isNotEmpty) ...[
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 schedule.description!,
                 style: TextStyle(
@@ -661,19 +936,94 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
+            const SizedBox(height: 6),
+            _buildScheduleStatus(schedule),
           ],
         ),
         trailing: schedule.isCompleted
-            ? Icon(Icons.check_circle, color: Colors.green.shade400)
+            ? Icon(Icons.check_circle, color: Colors.green.shade400, size: 28)
             : IconButton(
           onPressed: () => _completeSchedule(schedule),
           icon: Icon(
             Icons.check_circle_outline,
             color: Colors.grey.shade400,
+            size: 24,
           ),
           tooltip: 'Mark as completed',
         ),
-        onTap: () => context.push('/workspace/${widget.workspaceId}/schedule/${schedule.id}/edit'),
+        onTap: () => _navigateToEditSchedule(schedule),
+      ),
+    );
+  }
+
+  Widget _buildScheduleStatus(Schedule schedule) {
+    if (schedule.isCompleted) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.green.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'Completed',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Colors.green.shade700,
+          ),
+        ),
+      );
+    }
+
+    if (schedule.isOverdue) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.red.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'Overdue',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Colors.red.shade700,
+          ),
+        ),
+      );
+    }
+
+    if (schedule.isInProgress) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'In Progress',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Colors.orange.shade700,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Upcoming',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: Colors.blue.shade700,
+        ),
       ),
     );
   }
@@ -713,6 +1063,24 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final result = await context.push('/workspace/${widget.workspaceId}/create-schedule');
+                if (result != null) {
+                  _loadSchedules();
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Create Schedule'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade400,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],

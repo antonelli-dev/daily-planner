@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/entities/schedule.entity.dart';
 import '../domain/usecases/create_schedule.usecase.dart';
 import '../domain/usecases/update_schedule.usecase.dart';
+import '../domain/usecases/delete_schedule.usecase.dart';
 import '../domain/usecases/get_schedule_by_id.usecase.dart';
 import '../../workspace/domain/usecases/get_workspace_members.usecase.dart';
 import '../../workspace/domain/entities/workspace_member.dart';
@@ -79,7 +80,21 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       });
     } catch (e) {
       setState(() => _loadingInitial = false);
-      _showErrorSnackBar('Error loading data: ${e.toString()}');
+
+      String errorMessage = e.toString().replaceAll('Exception: ', '');
+      if (errorMessage.contains('not found')) {
+        errorMessage = 'This schedule no longer exists. It may have been deleted.';
+        // Navigate back after showing error
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) context.pop();
+        });
+      } else if (errorMessage.contains('permission') || errorMessage.contains('unauthorized')) {
+        errorMessage = 'You don\'t have permission to edit this schedule.';
+      } else if (errorMessage.contains('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+
+      _showErrorSnackBar(errorMessage);
     }
   }
 
@@ -88,9 +103,22 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     _descriptionController.text = schedule.description ?? '';
     _selectedDate = schedule.date;
     _selectedTime = TimeOfDay.fromDateTime(schedule.startTime);
-    _durationMinutes = schedule.durationMinutes;
-    _selectedColor = schedule.color;
-    _selectedIcon = schedule.icon;
+    _durationMinutes = schedule.durationMinutes.clamp(15, 480);
+
+    // Validate color format
+    if (ScheduleConstants.defaultColors.contains(schedule.color)) {
+      _selectedColor = schedule.color;
+    } else {
+      _selectedColor = ScheduleConstants.defaultColors.first;
+    }
+
+    // Validate icon
+    if (ScheduleConstants.defaultIcons.contains(schedule.icon)) {
+      _selectedIcon = schedule.icon;
+    } else {
+      _selectedIcon = ScheduleConstants.defaultIcons.first;
+    }
+
     _selectedPriority = schedule.priority;
     _selectedAssignee = schedule.assignedTo;
   }
@@ -126,11 +154,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           assignedTo: _selectedAssignee,
         );
 
-        await updateUseCase(widget.workspaceId, widget.scheduleId!, request);
+        final updatedSchedule = await updateUseCase(widget.workspaceId, widget.scheduleId!, request);
 
         if (mounted) {
           _showSuccessSnackBar('Schedule updated successfully!');
-          context.pop();
+          context.pop(updatedSchedule);
         }
       } else {
         // Create new schedule
@@ -149,20 +177,100 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           assignedTo: _selectedAssignee,
         );
 
-        await createUseCase(widget.workspaceId, request);
+        final newSchedule = await createUseCase(widget.workspaceId, request);
 
         if (mounted) {
           _showSuccessSnackBar('Schedule created successfully!');
-          context.pop();
+          context.pop(newSchedule);
         }
       }
     } catch (e) {
-      _showErrorSnackBar('Error saving schedule: ${e.toString()}');
+      String errorMessage = e.toString().replaceAll('Exception: ', '');
+
+      if (errorMessage.contains('validation')) {
+        errorMessage = 'Please check your input and try again.';
+      } else if (errorMessage.contains('conflict')) {
+        errorMessage = 'This time slot conflicts with another schedule.';
+      } else if (errorMessage.contains('permission')) {
+        errorMessage = 'You don\'t have permission to modify this schedule.';
+      } else {
+        errorMessage = 'Error ${isEditing ? 'updating' : 'creating'} schedule: $errorMessage';
+      }
+
+      _showErrorSnackBar(errorMessage);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<void> _deleteSchedule() async {
+    if (!isEditing || _existingSchedule == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.red.shade600),
+            const SizedBox(width: 12),
+            const Text('Delete Schedule'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "${_existingSchedule!.title}"?\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      _showLoadingSnackBar('Deleting schedule...');
+
+      final deleteUseCase = GetIt.I<DeleteScheduleUseCase>();
+      await deleteUseCase(widget.workspaceId, widget.scheduleId!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        _showSuccessSnackBar('Schedule deleted successfully!');
+
+        // Wait a moment then navigate back
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          context.pop('deleted');
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      _showErrorSnackBar('Error deleting schedule: ${e.toString().replaceAll('Exception: ', '')}');
+    }
+  }
+
+  void _duplicateSchedule() {
+    if (_existingSchedule == null) return;
+
+    // Adjust form for duplication
+    _titleController.text = '${_existingSchedule!.title} (Copy)';
+    _selectedDate = DateTime.now().add(const Duration(days: 1));
+
+    _showSnackBar('Ready to create a duplicate. Adjust details as needed.', isSuccess: true);
   }
 
   void _showSuccessSnackBar(String message) {
@@ -177,6 +285,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -193,6 +302,58 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, {bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.info_outline,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: isSuccess ? Colors.green : Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showLoadingSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -201,39 +362,78 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: Text(
-          isEditing ? 'Edit Schedule' : 'Create Schedule',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        shadowColor: Colors.grey.shade300,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: Colors.grey.shade700),
-        actions: [
-          if (!_loading)
-            TextButton(
-              onPressed: _saveSchedule,
-              child: Text(
-                isEditing ? 'Update' : 'Save',
-                style: TextStyle(
-                  color: Colors.purple.shade400,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: _loadingInitial
           ? const Center(child: CircularProgressIndicator())
           : _buildForm(),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: Text(
+        isEditing ? 'Edit Schedule' : 'Create Schedule',
+        style: const TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+      ),
+      centerTitle: true,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      shadowColor: Colors.grey.shade300,
+      surfaceTintColor: Colors.transparent,
+      iconTheme: IconThemeData(color: Colors.grey.shade700),
+      actions: [
+        if (isEditing)
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'delete':
+                  _deleteSchedule();
+                  break;
+                case 'duplicate':
+                  _duplicateSchedule();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'duplicate',
+                child: Row(
+                  children: [
+                    Icon(Icons.copy, size: 20),
+                    SizedBox(width: 12),
+                    Text('Duplicate'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete, color: Colors.red, size: 20),
+                    SizedBox(width: 12),
+                    Text('Delete', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        if (!_loading)
+          TextButton(
+            onPressed: _saveSchedule,
+            child: Text(
+              isEditing ? 'Update' : 'Save',
+              style: TextStyle(
+                color: Colors.purple.shade400,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -358,7 +558,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             ],
 
             // Save Button
-            Container(
+            SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
@@ -718,10 +918,18 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }
 
   Future<void> _selectDate() async {
+    // When editing, allow past dates if it's the original date
+    DateTime firstDate = DateTime.now();
+    if (isEditing && _existingSchedule != null) {
+      firstDate = _existingSchedule!.date.isBefore(DateTime.now())
+          ? _existingSchedule!.date
+          : DateTime.now();
+    }
+
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now(),
+      firstDate: firstDate,
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
         return Theme(
